@@ -1,0 +1,104 @@
+.offcanvas_slide{
+    transition: transform 500ms ease 0s;
+    width:800px;
+    height:100%;
+    position:fixed;
+    top:0;
+    right:-800px;
+    bottom:0;
+    z-index: 9000;
+}
+.offcanvas_slide_sub{
+    width:800px;
+    height:100%;
+    position:fixed;
+    top:0;
+    right:-800px;
+    bottom:0;
+    z-index: 9000;
+}
+
+.offcanvas_show{
+    transform: translate3d(-800px, 0px, 0px);
+}
+.offcanvas_show_sub{
+    left: 0px;
+}
+.offcanvas_close{
+    transform: translate3d(800px, 0px, 0px);
+}
+
+@media screen and (min-width: 0px) and (max-width: 810px) {
+    .offcanvas_slide{
+        width: 100% !important;
+        right : -100% !important;
+    }
+    .offcanvas_slide_sub{
+        width: 100% !important;
+        right : -100% !important;
+    }
+    .offcanvas_show{
+        transform: translate3d(-100%, 0px, 0px) !important
+    }
+    #doz_alarm_offcanvas.offcanvas_close{
+        transform: translate3d(100%, 0px, 0px) !important;
+    }
+
+}
+
+#tooltip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  background-color: white;
+  z-index: 20;
+}
+
+.datepicker-input {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	height: 40px;
+	padding: 0 11px;
+	border: 1px solid #DBDEE3;
+	border-radius: 8px;
+	background-color: #FFFFFF;
+	cursor: pointer;
+}
+
+.datepicker-input:hover {
+	border-color: #70A2FF;
+}
+
+.datepicker-input .calendar-icon-wrapper {
+	flex-shrink: 0;
+	display: flex;
+	font-size: 18px;
+}
+
+.datepicker-input .date-text-container {
+	flex: 1;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.datepicker-input .date-text {
+	min-width: 84px;
+	font-size: 14px;
+	font-weight: 400;
+	line-height: 20px;
+}
+
+.datepicker-input .middle-icon {
+	font-size: 18px;
+	transform: rotate(45deg);
+}
+
+.datepicker-input.same .date-text-container > *:not(:nth-child(1)) {
+	display: none;
+}
+
+.datepicker-input.same .date-text-container > *:nth-child(1) {
+	min-width: 192px;
+}

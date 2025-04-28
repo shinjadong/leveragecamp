@@ -1,0 +1,234 @@
+/* Base Styles */
+.imweb-datepicker {
+	display: grid;
+	grid-template-columns: 200px 1fr;
+	grid-template-rows: auto 1fr auto;
+	grid-template-areas:
+        "preset action"
+        "preset library"
+        "preset footer";
+	width: 100%;
+	max-width: 900px;
+	background-color: #ffffff;
+	border-radius: 12px;
+	box-shadow: 0 25px 80px 0 rgba(75, 81, 91, 0.20), 0 0 1px 0 rgba(75, 81, 91, 0.20);
+}
+
+.imweb-datepicker .button-group {
+	display: flex;
+	gap: 8px;
+}
+
+.imweb-datepicker .datepicker-button {
+	display: inline-flex;
+	justify-content: center;
+	align-items: center;
+	min-width: 64px;
+	padding: 8px 12px;
+	border: 1px solid transparent;
+	border-radius: 8px;
+	background-color: #ffffff;
+	font-size: 14px;
+	font-weight: 400;
+	line-height: 24px;
+	user-select: none;
+	cursor: pointer;
+}
+
+.imweb-datepicker .datepicker-button:focus {
+	outline: none;
+}
+
+.imweb-datepicker .datepicker-button--icon {
+	gap: 8px;
+}
+
+.imweb-datepicker .datepicker-button--icon svg {
+	font-size: 16px;
+}
+
+.imweb-datepicker .datepicker-button--primary {
+	border-color: #1a6dff;
+	background-color: #1a6dff;
+	color: #ffffff;
+}
+
+.imweb-datepicker .datepicker-button--primary:hover {
+	background-color: #70a2ff;
+	border-color: #70a2ff;
+}
+
+.imweb-datepicker .datepicker-button--primary:active {
+	background-color: #99bdff;
+	border-color: #99bdff;
+}
+
+.imweb-datepicker .datepicker-button--secondary {
+	color: #717680;
+}
+
+.imweb-datepicker .datepicker-button--secondary:hover {
+	border-color: #f8f9fb;
+	background-color: #f8f9fb;
+}
+
+.imweb-datepicker .datepicker-button--secondary:active {
+	border-color: #e2e5e9;
+	background-color: #e2e5e9;
+}
+
+.imweb-datepicker .datepicker-button--secondary.active {
+	background-color: rgb(133 189 255 / 0.15);
+}
+
+.imweb-datepicker .datepicker-button--outlined {
+	border-color: #dbdee3;
+	color: #717680;
+}
+
+.imweb-datepicker .datepicker-button--outlined:hover {
+	background-color: #f8f9fb;
+}
+
+.imweb-datepicker .datepicker-button--outlined:active {
+	background-color: #e2e5e9;
+}
+
+.imweb-datepicker .datepicker-button--disabled {
+	background-color: #e9e9eb;
+	border-color: #e9e9eb;
+	color: #bcc0c6;
+	cursor: not-allowed;
+}
+
+/* Preset area styles */
+.imweb-datepicker .preset-container {
+	grid-area: preset;
+	display: flex;
+	flex-direction: column;
+	padding: 12px;
+	border-right: 1px solid #e2e5e9;
+}
+
+.imweb-datepicker .preset-container > * ~ * {
+	margin-top: 4px;
+}
+
+.imweb-datepicker .preset-container .datepicker-button {
+	justify-content: flex-start;
+	padding-block: 10px;
+}
+
+.imweb-datepicker .preset-container .datepicker-button.datepicker-button--secondary {
+	color: #15181E;
+}
+
+/* Action area Styles */
+.imweb-datepicker .action-container {
+	display: flex;
+	justify-content: flex-start;
+	padding: 24px 24px 0;
+}
+
+.imweb-datepicker .action-container .type-button-container {
+	padding-bottom: 24px;
+}
+
+/* Library area styles */
+.imweb-datepicker .library-container {
+	grid-area: library;
+	width: auto;
+	padding: 0 24px;
+}
+
+/* Footer area styles */
+.imweb-datepicker .footer-container {
+	grid-area: footer;
+	padding: 0 24px 24px;
+}
+
+.imweb-datepicker .footer-container .display-container {
+	display: flex;
+	gap: 1px;
+	margin-block: 24px;
+}
+
+.imweb-datepicker .footer-container .display-container > *:first-of-type {
+	border-top-left-radius: 8px;
+	border-bottom-left-radius: 8px;
+}
+
+.imweb-datepicker .footer-container .display-container > *:last-of-type {
+	border-top-right-radius: 8px;
+	border-bottom-right-radius: 8px;
+}
+
+.imweb-datepicker .footer-container .display {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 12px 16px;
+	border: 1px solid transparent;
+}
+
+.imweb-datepicker .footer-container .display--selected {
+	border-color: #f8f9fb;
+	background-color: #f8f9fb;
+}
+
+.imweb-datepicker .footer-container .display--unselected {
+	border-color: #dbdee3;
+	background-color: #ffffff;
+}
+
+.imweb-datepicker .footer-container .display--focused {
+	border-color: #1a6dff;
+}
+
+.imweb-datepicker .footer-container .display-label {
+	font-size: 12px;
+	font-weight: 400;
+	line-height: 16px;
+	color: #15181e;
+	text-align: left;
+}
+
+.imweb-datepicker .footer-container .display-time {
+	font-size: 14px;
+	font-weight: 400;
+	line-height: 20px;
+	color: #717680;
+	text-align: left;
+}
+
+.imweb-datepicker .footer-container .button-container {
+	display: flex;
+	justify-content: space-between;
+}
+
+@media screen and (max-width: 768px) {
+	.imweb-datepicker {
+		grid-template-columns: 1fr;
+		grid-template-rows: auto auto 1fr auto;
+		grid-template-areas:
+            "preset"
+            "action"
+            "library"
+            "footer";
+	}
+
+	.imweb-datepicker .preset-container {
+		flex-direction: row;
+		flex-wrap: wrap;
+		border-right: none;
+	}
+
+	.imweb-datepicker .action-container {
+		padding-top: 12px;
+	}
+
+	.imweb-datepicker .preset-container .datepicker-button {
+		justify-content: center;
+	}
+}

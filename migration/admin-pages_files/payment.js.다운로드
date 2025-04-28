@@ -1,0 +1,1506 @@
+var PAYMENT = {
+    onClickStep2 : function() {
+        var data = $('#form-step1').serializeObject();
+
+        $.ajax({
+            type: 'POST',
+            data: data,
+            url: ('/admin/ajax/upgrade_plan_step1.cm'),
+            dataType: 'json',
+            async: false,
+            cache: false,
+            success:function(result)
+            {
+                if(result.msg == 'SUCCESS') {
+
+                    var url = '/admin/upgrade/list/?mode=' + result.mode + '&plan=' + result.plan + '&type=' + result.type + '&step=' + result.step
+                        + '&period_type=' + result.period_type;
+
+                    if(result.monthly_type != '')
+                        url += '&monthly_type=' + result.monthly_type;
+
+                    window.parent.location.href = url;
+                }
+                else {
+                    alert(result.msg);
+                }
+            }
+        });
+    },
+
+    onSelectMonthlyPayment : function(basic_price, period, version) {
+        $.ajax({
+            type: 'POST',
+            data: {'basic_price': basic_price, 'period': period, 'version': version },
+            url: ('/admin/ajax/select_monthly_price.cm'),
+            dataType : 'json',
+            async: false,
+            cache: false,
+            success:function(result)
+            {
+                if(result.msg == 'SUCCESS') {
+                    //alert(result.html);
+                    $('#month_select_price').empty().html(result.html);
+                }
+            }
+        });
+    },
+
+    onClickPaymentSubmitForm : function() {
+        $('#payment_submit_form').submit();
+    },
+
+    //가상계좌 입금계좌 확인 모달출력 함수
+    checkDepositAccount : function(order_number){
+        $.ajax({
+            type : "POST",
+            data : {"order_number" : order_number},
+            url : ("/admin/ajax/check_deposit_account.cm"),
+            dataType : "json",
+            async : false,
+            cache : false,
+            success : function(result){
+                if(result.msg === "SUCCESS"){
+                    $.cocoaDialog.open({type : "admin_check_deposit_account", custom_popup : result.html});
+                }else{
+                    alert(result.msg);
+                }
+            }
+        });
+    }
+};
+
+var PRICE = {
+    country: "",
+    cache: {},
+    start : function(country){
+        this.country = country;
+        var $payment_type = $("#div_payment_type");
+        var type = $('#type').val();
+        //기간연장/업그레이드
+        if(type === "upgrade") {
+            ADMIN_ADD_CARD.reloadedValueCheck();
+            PRICE.initParams();
+            PRICE.setVersion();
+            PRICE.setPeriod();
+            $("#coupon_value").on("focus",function(){
+                var $radio_term_item = $("._day_ck").find("[name='rdo_term_kind']");
+                if($("._day_ck").find("[name='rdo_term_kind']:radio:checked").val() !== "coupon"){
+                    $radio_term_item.each(function(){
+                        if($(this).val() === "coupon"){
+                            $(this).prop("checked", true);
+                        }
+                    });
+                }
+                PRICE.setPeriod();
+            });
+
+        }
+        //부가 서비스
+        else {
+            var proc_file = "./payment/proc_ajax.cm";
+            var param = {};
+            param.mode = "get_site_infomation";
+            param.country = this.country;
+            param.site_code = $("#sel_site").val();
+            param.version = $("#value_version").val();
+            param.site_changed = "N";
+
+            $.ajax({
+                type: 'POST',
+                url: proc_file,
+                data: param,
+                async: false,
+                success: function(data) {
+                    service_info = $.parseJSON(data);
+                }
+            });
+            PRICE.setExtraService(type);
+        }
+
+        // 결제방식 제어
+        $payment_type.find('.item-wrap').find('a.item').on('click', function(){
+            if ( $(this).hasClass('text-gray-bright') ) {
+                var disabled_msg = $(this).data('disabled_msg');
+                if ( disabled_msg.trim() != '' )    alert(disabled_msg);
+            } else {
+                $('#div_payment_type').find('.item-wrap').find('a.item.active').removeClass('active');
+                $(this).addClass('active');
+                $('input[name=sel_payment_type]').val($(this).data('paymethod'));
+            }
+        });
+
+
+        $("#prev_version_price").val(service_info.version_price);
+        $("#request_site_version").val(service_info["site_version"]);
+        $("#request_price").val(service_info["price"]);
+        $('#btn_payment').on('click', function(e){
+            e.stopPropagation();
+            PRICE.submit();
+            return false;
+        });
+        this.paymentInit();
+
+        switch(this.country){
+            case KOREA_COUNTRY_CODE:
+                this.initKR();
+                break;
+            case TAIWAN_COUNTRY_CODE:
+                this.initTW();
+                break;
+        }
+    },
+
+    initKR: function(){
+        // 정기결제 관련 제어
+        var $payment_type = $('#div_payment_type');
+        $('input[name="rdo_term_kind"]:radio').on('change', function(){
+            $payment_type.find('.item-wrap').find('a.item').each(function(){
+                $(this).toggleClass('text-gray-bright', !$(this).data('default'));
+            });
+
+            if ($(this).val() === 'one_month') {
+                $payment_type.find('.item-wrap').find('a.item').each(function(){
+                    var _pay_method = $(this).data('paymethod');
+                    if (_pay_method === "card") {
+                        $(this).toggleClass('disabled', false);
+                        if ( !$(this).hasClass('active') ) {
+                            $payment_type.find('.item-wrap').find('a.item').removeClass('active');
+                            $(this).addClass('active');
+                            $('input[name=sel_payment_type]').val(_pay_method);
+                        }
+                    } else {
+                        $(this).toggleClass('text-gray-bright', true);
+                    }
+                });
+            }
+        });
+
+        $.each($('input[name=rdo_term_kind]'), (idx, el) => {
+            const $el = $(el)
+            const value = $el.val()
+
+            if (value === 'non_extension' || value === 'coupon') {
+                $el.on('change', () => PRICE.handleChangeNonPeriod())
+            } else {
+                $el.on('change', () => PRICE.handleChangePeriod($el))
+            }
+        })
+
+        $('._extend_period_list').find('input[name=value_version]').on('change', PRICE.handleChangeVersion)
+    },
+
+    initTW: function(){
+        var $invoice_wrapper = $('._invoice_wrapper');
+        $invoice_wrapper.find('select').on('change', function(){
+            $invoice_wrapper.find('._invoice_data_wrapper').toggle( ($(this).val().trim()!= '') );
+            var invoice_type = $(this).val();
+            $invoice_wrapper.find('._invoice_data').each(function(){
+                var target = $(this).data('target');
+                $(this).toggle(target.indexOf(invoice_type) != -1);
+            });
+        });
+
+        $invoice_wrapper.find('._invoice_love_code').on('keyup', function(){
+            $(this).data('checked', false);
+            $invoice_wrapper.find('._love_code_chk_btn').addClass('btn-primary');
+        });
+
+        $('input[name=rdo_term_kind]').on('change', PRICE.setPeriod)
+
+        $('._extend_period_list').find('input[name=value_version]').on('change', PRICE.setVersion)
+    },
+
+    checkLoveCode: function(){
+        var love_code = $('._invoice_love_code').val();
+        if ( love_code.length > 0 ) {
+            $.ajax({
+                "type": "POST",
+                "url": "/admin/ajax/check_invoice_donation_code.cm",
+                "data": {"love_code": love_code},
+                "dataType": "JSON",
+                "success": function(res){
+                    if ( res.msg == 'SUCCESS' ) {
+                        $('._invoice_love_code').data('checked', true);
+                        $('._love_code_chk_btn').removeClass('btn-primary');
+                    } else {
+                        alert(res.msg);
+                    }
+                }
+            });
+        }
+        return false;
+    },
+
+    initParams: function() {
+      const { version = 'free', period= 'one_year' } = this.getParams();
+      [version, period].forEach(value => {
+        const $radio = document.querySelector(`input[type="radio"][value="${value}"]`);
+        if (!$radio) return;
+
+        $radio.checked = true;
+      });
+
+      /**
+       * PG 프로모션 조건
+       * pro 버전 - 1, 3, 6개월 선택 시 띄우기
+       * global 버전 - 1, 3개월 선택 시 띄우기
+       */
+      const modal_period = {
+        pro: ['one_month', 'three_month', 'six_month'],
+        global: ['one_month', 'three_month'],
+      }[version] ?? []
+
+      if (modal_period.includes(period)) {
+        PRICE.openPromotionPGModal(version);
+        PRICE.togglePromotionPGInfo(false);
+      } else {
+        PRICE.togglePromotionPGInfo(true);
+      }
+    },
+
+    getParams: function() {
+      return Object.fromEntries(new URLSearchParams(window.location.search));
+    },
+
+    setParams: function(params) {
+      const searchParams = new URLSearchParams(window.location.search);
+      Object.keys(params).forEach(key => searchParams.set(key, params[key]));
+      window.history.replaceState({}, '', `${window.location.pathname}?${searchParams}`);
+    },
+
+    //요금 티어 선택
+    setVersion : function(){
+        var select_version;
+        select_version = $("input[name='value_version']:checked").val();
+        if(select_version == 'free' || select_version == 'sample') {
+            $("._extend_list").hide();
+        } else {
+            $("._extend_list").show();
+        }
+
+        PRICE.setParams({ version: select_version });
+        PRICE.togglePaymentInfoVersionFree();
+        var proc_file = "./payment/proc_ajax.cm";
+        var param = {};
+
+        param.country = this.country;
+        param.mode = "get_site_infomation";
+        param.site_code = $("#sel_site").val();
+        param.version = select_version;
+        param.site_changed = "N";
+        param.term_kind = $("._day_ck").find("[name='rdo_term_kind']:checked").val();
+
+        $.ajax({
+            type: 'POST',
+            url: proc_file,
+            data: param,
+            async: false,
+            success: function(data) {
+                service_info = $.parseJSON(data);
+            }
+        });
+
+        if(service_info.site_version !== "free" && service_info.site_version !== 'sample') {
+            var current_version_span_id = "#div_upgrade_"+service_info.site_version+"_price_sub";
+
+            $("#div_upgrade_starter_price_sub").html(this.makePriceStr(service_info.starter_price_upgrade));
+            $("#div_upgrade_pro_price_sub").html(this.makePriceStr(service_info.pro_price_upgrade));
+            $("#div_upgrade_global_price_sub").html(this.makePriceStr(service_info.global_price_upgrade));
+            $(current_version_span_id).html("");
+
+            $("#div_upgrade_pay").show();
+
+        } else {
+            $(".not_extend").empty().toggleClass('border-bottom', false);
+            $("#div_upgrade_pay").hide();
+            $("#div_upgrade_price").html("");
+        }
+        if(service_info.upgrade_version && service_info.upgrade_version !== "free") {
+            var event_discount = 1;
+            var discount = 1;
+            var site_version_price = service_info['default_price'] * discount * event_discount;
+            var is_event = false;
+
+            if ( typeof service_info['event_discount'] != 'undefined') {
+                service_info['event_discount'] = parseFloat(service_info['event_discount']);
+                if ( !isNaN(service_info['event_discount']) && service_info['event_discount'] !== 0 ) {
+                    event_discount = 1 - (service_info['event_discount'] / 100);
+                }
+            }
+
+            var price_str_per_month = "/" + getLocalizeString('타이틀_월', '', '월');
+            var price_wrapper = {1: "price_one_month", 3: "price_three_month", 6: "price_six_month", 12: "price_one_year", 24: "price_two_year"};
+            for ( var _period in price_wrapper ) {
+                _period = parseInt(_period);
+                if ( typeof service_info['discount'][_period] != "undefined" )  discount = 1 - (service_info['discount'][_period] / 100);
+                site_version_price = service_info['default_price'] * discount * event_discount;
+
+                $("#"+price_wrapper[_period]).html(this.makePriceStr(service_info["default_price"]) + price_str_per_month);
+                $("#"+price_wrapper[_period]).toggle(service_info['default_price'] > site_version_price);
+                $("#discount_" + price_wrapper[_period]).html(this.makePriceStr(site_version_price) + price_str_per_month);
+                $("#discount_" + price_wrapper[_period]).toggleClass('text-primary', (service_info['price'] > site_version_price));
+
+                if(service_info['discount_str'][service_info.upgrade_version][_period] !== ''){
+                    $(".discount_" + price_wrapper[_period] + "_str").text( " (" + getLocalizeString('설명_n프로할인', service_info['discount_str'][service_info.upgrade_version][_period], service_info['discount_str'][service_info.upgrade_version][_period] + '%') + ")");
+                }
+            }
+        }
+        $("#prev_version_price").val(service_info.version_price);
+        $("#request_extend_price").val(service_info.price_extend);
+        $("#request_upgrade_price").val(service_info.price_upgrade);
+
+        service_info.total_price = parseInt(service_info.price_extend, 10);
+        this.setdiscountRate();
+        this.drawPriceSection();
+    },
+    togglePaymentInfoVersionFree : function (){
+      //if Version === Free, this function will be operated Once.
+      if($("input[name='value_version']:checked").val() === 'free'){
+        $("#notify_regularly_payment").addClass("tw-hidden");
+      } else {
+        $("#notify_regularly_payment").removeClass("tw-hidden");
+      }
+    },
+
+    setdiscountRate : function(){
+      var discount_wrapper = {
+        1: "discount_rate_by_version_one_month",
+        3: "discount_rate_by_version_three_month",
+        6: "discount_rate_by_version_six_month",
+        12: "discount_rate_by_version_one_year",
+        24: "discount_rate_by_version_two_year",
+      };
+      switch ( this.country ) {
+        case 'kr':
+          for(var _discount in discount_wrapper){
+            if(_discount === '1'){
+              $(`#${discount_wrapper[_discount]}`).html( getLocalizeString("설명_n개월",_discount,"%1개월") );
+            } else {
+              $(`#${discount_wrapper[_discount]}`).html(
+                getLocalizeString("설명_n개월",_discount,"%1개월")
+                +` (`
+                + service_info.discount[_discount]
+                +'% '
+                + getLocalizeString("설명_할인",'',"off")
+                +`)`
+              )
+            }
+          }
+          break;
+        case 'tw':
+          for(var _discount in discount_wrapper){
+              $(`#${discount_wrapper[_discount]}`).html(
+                getLocalizeString("설명_n개월",_discount,"%1개월")
+                +` (`
+                + service_info.discount_str[service_info['upgrade_version']][_discount]
+                +'% '
+                + getLocalizeString("설명_할인",'',"off")
+                +`)`
+              )
+          }
+          break;
+      }
+    },
+    //기간 선택
+    setPeriod : function(){
+        var proc_file = "./payment/proc_ajax.cm";
+        var param = {};
+
+        param.country = this.country;
+        param.mode = "get_site_infomation";
+        param.site_code = $("#sel_site").val();
+        param.version = service_info.upgrade_version;
+        param.site_changed = "N";
+        param.term_kind = $("._day_ck").find("[name='rdo_term_kind']:checked").val();
+
+        PRICE.setParams({ period: param.term_kind });
+
+        $.ajax({
+            type: "POST",
+            url: proc_file,
+            data: param,
+            async: false,
+            success: function(data) {
+                service_info = $.parseJSON(data);
+            }
+        });
+        $("#prev_version_price").val(service_info.version_price);
+        $("#request_extend_price").val(service_info.price_extend);
+        $("#request_upgrade_price").val(service_info.price_upgrade);
+        $("#next_pay_date").html(service_info.next_pay_date + " ");
+
+        service_info.total_price = parseInt(service_info.price_extend, 10);
+        this.paymentInit();
+        this.drawPriceSection();
+        if(this.country === "kr"){
+          this.drawPeriodSection();
+        }
+    },
+
+    setExtraService : function(type) {
+        service_info.price_extend = 0;
+        service_info.price_upgrade = 0;
+
+        if(type === 'ios') {
+            $('#ios_price_list').toggle(service_info["is_ios_infinite"] !== 'Y');
+            if((service_info["is_ios_infinite"] !== 'Y') && $('#ios_price_list').find(':radio:checked').length > 0){
+                var ios_price_selected = $('#ios_price_list').find(':radio:checked').val();
+                if(service_info["ios_price"][ios_price_selected] !== undefined && service_info.is_ios_infinite !== 'Y'){
+                    $("#request_ios").val(service_info['ios_price'][ios_price_selected]);
+                    service_info.total_price = parseInt(service_info['ios_price'][ios_price_selected]);
+                }
+            }
+        } else if(type === 'android') {
+            if($("#chk_android").is(":checked") && service_info.app_android === 'N'){
+                $("#request_android").val(parseInt(service_info.android_price));
+                service_info.total_price = parseInt(service_info.android_price);
+            }
+            $("#div_android_price_wrapper").find(".text-line-through").html(this.makePriceStr(service_info.android_price * 2));
+            $("#div_android_price_wrapper").find(".text-primary").html(this.makePriceStr(service_info.android_price));
+        } else if(type === 'adult') {
+            $("#auth_service_price_dream_security").html(this.makePriceStr(service_info.auth_service_price_dream_security));
+            $("#auth_service_price_mobilians").html(this.makePriceStr(service_info.auth_service_price_mobilians));
+            $("#auth_service_price_inicis").html(this.makePriceStr(service_info.auth_service_price_inicis));
+
+            var auth_comobination_price_html = this.makePriceStr(service_info.auth_service_price_combination);
+            if(service_info.auth_service_price_combination === 0) auth_comobination_price_html = "<del class='text-gray-bright'>30,000원</del>"+"<span class='text-danger'> "+auth_comobination_price_html+"</span>";
+
+            $("#auth_service_price_combination").html(auth_comobination_price_html);
+
+            service_info.total_price = 0;
+
+            $("#chk_auth_service_dream_security").change(function(){
+                if($("#chk_auth_service_dream_security").prop("checked")){
+                    service_info.total_price += parseInt(service_info.auth_service_price_dream_security);
+                    $("#request_auth_service_dream_security").val(service_info.auth_service_price_dream_security);
+                }else{
+                    service_info.total_price -= parseInt(service_info.auth_service_price_dream_security);
+                    $("#request_auth_service_dream_security").val(0);
+                }
+                PRICE.drawPriceSection();
+            });
+            $("#chk_auth_service_mobilians").change(function(){
+                if($("#chk_auth_service_mobilians").prop("checked")){
+                    $("._auth_mobilians_description").show();
+
+                    service_info.total_price += parseInt(service_info.auth_service_price_mobilians);
+                    $("#request_auth_service_mobilians").val(service_info.auth_service_price_mobilians);
+                }else{
+                    $("._auth_mobilians_description").hide();
+
+                    service_info.total_price -= parseInt(service_info.auth_service_price_mobilians);
+                    $("#request_auth_service_mobilians").val(0);
+                }
+                PRICE.drawPriceSection();
+            });
+            $("#chk_auth_service_inicis").change(function(){
+                if($("#chk_auth_service_inicis").prop("checked")){
+                    service_info.total_price += parseInt(service_info.auth_service_price_inicis);
+                    $("#request_auth_service_inicis").val(service_info.auth_service_price_inicis);
+                }else{
+                    service_info.total_price -= parseInt(service_info.auth_service_price_inicis);
+                    $("#request_auth_service_inicis").val(0);
+                }
+                PRICE.drawPriceSection();
+            });
+            $("#chk_auth_service_combination").change(function(){
+                if($("#chk_auth_service_combination").prop("checked")){
+                    service_info.total_price += parseInt(service_info.auth_service_price_combination);
+                    $("#request_auth_service_combination").val(service_info.auth_service_price_combination);
+                }else{
+                    service_info.total_price -= parseInt(service_info.auth_service_price_combination);
+                    $("#request_auth_service_combination").val(0);
+                }
+                PRICE.drawPriceSection();
+            });
+        }
+        PRICE.drawPriceSection();
+
+    },
+
+    drawPriceSection : function() {
+        var total_price = parseInt(service_info.total_price);
+        var upgrage_price = parseInt(service_info.price_upgrade);
+        var price_tax = 0;
+        var sum_data = total_price + upgrage_price;
+        var next_pay_price = 0;
+
+        switch ( this.country ) {
+            default:
+            case KOREA_COUNTRY_CODE:
+                price_tax = parseInt(sum_data * service_info.vat, 10);
+                sum_data += price_tax;
+                next_pay_price = total_price + parseInt(total_price * service_info.vat, 10);
+                break;
+            case TAIWAN_COUNTRY_CODE:
+                total_price = Math.round(total_price / (1 + service_info.vat));
+                upgrage_price = Math.round((upgrage_price / (1 + service_info.vat)));
+                price_tax = sum_data - (total_price + upgrage_price);
+                break;
+        }
+
+        $("#div_total_price").html(this.makePriceStr(total_price));
+        $("#div_upgrade_price").html(this.makePriceStr(upgrage_price));
+        $("#div_total_tax").html(this.makePriceStr(price_tax));
+        $("#div_total").html(this.makePriceStr(sum_data));
+        $("#regular_payment_price").html(this.makePriceStr(next_pay_price));
+
+        if ( this.country == 'tw' ) {
+            this.checkLimit(sum_data);
+        }
+    },
+    drawPeriodSection : function(){
+      let period = "12개월";
+      switch ($("._day_ck").find("[name='rdo_term_kind']:checked").val()){
+        case "non_extension":
+          $("#regular_payment_period").html('연장 안함');
+          $("#select_promotion_code").removeClass('tw-hidden');
+          $("#view_select_promotion_code").addClass('tw-hidden');
+        break;
+        case "one_month":
+          $("#regular_payment_period").html('1개월');
+          $("#select_promotion_code").removeClass('tw-hidden');
+          $("#view_select_promotion_code").addClass('tw-hidden');
+          break;
+        case "three_month":
+          $("#regular_payment_period").html('3개월');
+          $("#select_promotion_code").removeClass('tw-hidden');
+          $("#view_select_promotion_code").addClass('tw-hidden');
+          break;
+        case "six_month":
+          $("#regular_payment_period").html('6개월');
+          $("#select_promotion_code").removeClass('tw-hidden');
+          $("#view_select_promotion_code").addClass('tw-hidden');
+          break;
+        case "one_year":
+          $("#regular_payment_period").html('12개월');
+          $("#select_promotion_code").removeClass('tw-hidden');
+          $("#view_select_promotion_code").addClass('tw-hidden');
+          break;
+        case "two_year":
+          $("#regular_payment_period").html('24개월');
+          $("#select_promotion_code").removeClass('tw-hidden');
+          $("#view_select_promotion_code").addClass('tw-hidden');
+          break;
+        case "coupon" :
+          $("#select_promotion_code").addClass('tw-hidden');
+          $("#view_select_promotion_code").removeClass('tw-hidden');
+          $("#view_select_promotion_code").html(`
+            <li class="tw-flex tw-justify-between tw-items-center tw-mb-[8px]">
+              <label class="tw-m-0">총 결제 금액</label>
+              <p class="tw-p-0 tw-m-0 tw-font-bold tw-text-[12px] tw-text-[#757575] text-primary tw-text-[18px]">무료</p>
+            </li>
+          `);
+        default : $("#regular_payment_period").html('12개월');
+      }
+
+    },
+
+    checkLimit: function(total_price){
+        // 일단은 임시 처리 개념.. (결제 수단 별로 결제 한도가 다름)
+        var _PAYMENT_LIMIT = {
+            "card": 	{"min": 1, "max": 200000},
+            "webatm": 	{"min": 11, "max": 30000},
+            "atm": 		{"min": 11, "max": 30000},
+            "cvs": 		{"min": 31, "max": 20000},
+            "barcode": 	{"min": 16, "max": 30000},
+        };
+
+        var disabled_list = [];
+        disabled_list.push("android");
+        for ( var key in _PAYMENT_LIMIT ) {
+            //if ( _PAYMENT_LIMIT[key]['min'] > total_price ) disabled_list.push(key);
+            if ( _PAYMENT_LIMIT[key]['max'] < total_price ) disabled_list.push(key);
+        }
+
+        if ( disabled_list.length > 0 ) {
+            var $payment_type = $('#div_payment_type');
+            $payment_type.find('.item-wrap').find('a.item').each(function(){
+                if ( disabled_list.indexOf($(this).data('paymethod')) !== -1 )	{
+                    $(this).addClass('disabled');
+                } else {
+                    $(this).removeClass('disabled');
+                }
+            });
+
+            if ( $payment_type.find('.item-wrap').find('a.item.active').hasClass('disabled') ) {
+                $payment_type.find('.item-wrap').find('a.item.active').removeClass('active');
+                if ( $payment_type.find('.item-wrap').find('a.item:not(.disabled)').length > 0 ) {
+                    var $new_paymethod = $payment_type.find('.item-wrap').find('a.item:not(.disabled)').first();
+                    $new_paymethod.addClass('active');
+                    $('input[name=sel_payment_type]').val($new_paymethod.data('paymethod'));
+                }
+            }
+        }
+    },
+
+    submit : function(session_uid = ""){
+        // 아직 로딩이 완료되지 않은 상태
+        if ( typeof service_info == 'undefined' ) return false;
+
+        var is_error = false;
+        var $form = $('#payment_submit_form');
+        var form_data = $form.serializeObject();
+        let payment_type ='';
+        switch (form_data.type){
+          case'ios': payment_type ='ios';
+            break;
+          case 'android' : payment_type ='android';
+            break;
+          case 'adult' : payment_type ='adult';
+            break;
+        }
+      if(payment_type !=='adult' && payment_type !== 'android' && payment_type !== 'ios' && this.country === KOREA_COUNTRY_CODE ){
+          if($("._day_ck").find("[name='rdo_term_kind']:radio:checked").val() !== "coupon" && $("._day_ck").find("[name='rdo_term_kind']:radio:checked").val() !== "non_extension"){
+            if(form_data.billing_code === undefined ){
+              alert('결제할 카드를 선택해 주세요.')
+              return false;
+            }
+          }
+        }
+      if ( this.country == KOREA_COUNTRY_CODE ) {
+            if($("#chk_ios").is(":checked")&& !$('#ios_price_list').find(':radio:checked').length){
+                if (service_info.is_ios_infinite !== 'Y') {
+                    is_error = true;
+                    alert(getLocalizeString("설명_Ios사용기간선택", '', "IOS APP의 사용 기간을 선택해주세요."));
+                    return false;
+                }
+            }
+        }
+
+        if ( this.country == TAIWAN_COUNTRY_CODE ) {
+            var invoice_type = form_data['invoice[type]'];
+            if ( invoice_type.trim() == '' ) {
+                is_error = true;
+                alert(getLocalizeString('설명_통일영수증정보를입력해주세요', '', '통일영수증 정보를 입력해주세요.'));
+                return false;
+            }
+            $form.find('._invoice_data_wrapper').find('._invoice_data').each(function(){
+                var target = $(this).data('target');
+                if ( ['all', invoice_type].indexOf(target) != -1 ) {
+                    if ( $(this).find('input').val().trim() == '' ) is_error = true;
+                }
+            });
+
+            if ( is_error ) {
+                alert(getLocalizeString('설명_통일영수증정보를모두입력해주세요', '', '통일 영수증 정보를 모두 입력해 주세요.'));
+                return false;
+            }
+
+            if ( invoice_type == 'donation' ) {
+                if ( !$('._invoice_love_code').data('checked') ) {
+                    is_error = true;
+                    alert(getLocalizeString('설명_기부코드를체크해주세요', '', '기부코드를 체크 해 주세요.'));
+                    return false;
+                }
+            }
+        }
+
+
+        if( form_data['type'] === 'upgrade' && form_data['rdo_term_kind'] === 'coupon' ){ // 쿠폰일때는 결제 금액이 없어서 결제금액 확인 패스
+        }else{
+            if ( ! (this.checkTotalPrice(form_data) > 0) && service_info.auth_service_combination === 0 && parseInt(form_data.request_auth_service_combination) === 0) {
+                is_error = true;
+                alert(getLocalizeString('설명_결제금액을확인해주세요', '', '결제 금액을 확인해주세요.'));
+                return false;
+            }
+        }
+
+        if (this.country == "kr" && !is_error) {
+        switch ($("._day_ck").find("[name='rdo_term_kind']:radio:checked").val()){
+          case 'one_month':
+          case 'three_month':
+          case 'six_month':
+          case 'one_year':
+          default: {
+            $form.submit();
+          }
+            break;
+        }
+      } else {
+        if (!is_error) {
+          $form.submit();
+        }
+      }
+        return false;
+    },
+
+    checkTotalPrice: function(form_data){
+        var total_price = 0;
+        var check_list = ['1','request_upgrade_price', 'request_extend_price', 'request_android', 'request_ios', 'request_auth_service_dream_security', 'request_auth_service_mobilians', 'request_auth_service_inicis', 'request_auth_service_combination'];
+        for (var _key in check_list ) {
+            if ( typeof form_data[check_list[_key]] != "undefined" ) {
+                total_price += isNaN( parseInt(form_data[check_list[_key]]) ) ? 0 : parseInt(form_data[check_list[_key]]);
+            }
+        }
+        return total_price;
+    },
+
+    paymentInit : function(){
+        if($("._day_ck").find("[name='rdo_term_kind']:checked").val() === 'coupon'){
+            $("._total_price_wrap").hide();
+            $("#div_payment_type").hide();
+            $("#btn_payment").hide();
+            $("#btn_coupon").show();
+            $('#payment_mode').val('price_page_coupon');
+            $("#select_card_container").hide();
+            $("#select_card_submit_btn").attr("disabled", false);
+	          $("._promotion_text_info").css('display', 'flex');
+        }else{
+            $("._total_price_wrap").show();
+            $("._payment_type_wrap").show();
+            $("#btn_payment").show();
+            $("#btn_coupon").hide();
+            $('#payment_mode').val('price_page');
+            $("#select_card_container").show();
+	          $("._promotion_text_info").hide();
+            // 만약
+          if($("#select_card_container")){
+            $("input[name='billing_code']").val() ?
+              $("#select_card_submit_btn").attr("disabled", false)
+              :
+              $("#select_card_submit_btn").attr("disabled", true);
+          }
+        }
+    },
+
+    // admin/payment/service.sub 에서 사용
+    updateRegularPayment : function(id){
+        var url = "/payment/index.cm";
+
+        var form = document.createElement("form");
+        form.setAttribute("method", "post");
+        form.setAttribute("action", url);
+
+        var hiddenField = document.createElement("input");
+        hiddenField.setAttribute("type", "hidden");
+        hiddenField.setAttribute("name", "site_idx");
+        hiddenField.setAttribute("value", id);
+        form.appendChild(hiddenField);
+        document.body.appendChild(form);
+
+        var hiddenField2 = document.createElement("input");
+        hiddenField2.setAttribute("type", "hidden");
+        hiddenField2.setAttribute("name", "payment_mode");
+        hiddenField2.setAttribute("value", "regular_payment_update");
+        form.appendChild(hiddenField2);
+        document.body.appendChild(form);
+
+        var hiddenField3 = document.createElement("input");
+        hiddenField3.setAttribute("type", "hidden");
+        hiddenField3.setAttribute("name", "pg_back_url");
+        hiddenField3.setAttribute("value", "/admin/payment");
+        form.appendChild(hiddenField3);
+        document.body.appendChild(form);
+
+        var hiddenField4 = document.createElement("input");
+        hiddenField4.setAttribute("type", "hidden");
+        hiddenField4.setAttribute("name", "is_admin");
+        hiddenField4.setAttribute("value", "Y");
+        form.appendChild(hiddenField4);
+        document.body.appendChild(form);
+
+        var hiddenField5 = document.createElement("input");
+        hiddenField5.setAttribute("type", "hidden");
+        hiddenField5.setAttribute("name", "is_regular_change");
+        hiddenField5.setAttribute("value", "Y");
+        form.appendChild(hiddenField5);
+        document.body.appendChild(form);
+
+        form.submit();
+    },
+
+  reasonsForLeave : function (id, next_pay_date) {
+      $.ajax({
+        type: 'POST',
+        data: { idx : id, next_pay_date: next_pay_date },
+        url: ('/admin/ajax/collection_of_reasons_for_leave.cm'),
+        dataType: 'json',
+        async: true,
+        cache: false,
+        success: function (res) {
+          if (res.msg === 'SUCCESS') {
+            $.cocoaDialog.open({ type: 'collection_of_reasons_for_leave', custom_popup: res.html });
+          } else {
+            console.log(res.msg);
+          }
+        }
+      });
+  },
+
+  confirmCancelRegularPayment : function () {
+    if (
+      confirm(getLocalizeString('설명_정기결제해지를취소하시겠습니까','','정기결제 해지를 취소하시겠습니까?'))
+    ) {
+      $.cocoaDialog.close();
+    }
+  },
+
+  unsetRegularPaymentSubmitReason : function( idx ) {
+      const reasonForm = $('form#reasons_for_leave');
+      const reasonData = reasonForm.serializeObject();
+      const checkboxDissatisfaction = reasonForm.find('#dissatisfaction_other_reason_checkbox_0');
+      const dissatisfactionOtherReasonTextareaWarp = reasonForm.find('#dissatisfaction_other_reason_0');
+      const checkboxUseOtherService = reasonForm.find('#dissatisfaction_other_reason_checkbox_1');
+      const otherServiceeasonTextareaWarp = reasonForm.find('#dissatisfaction_other_reason_1');
+      const radioOtherReason = reasonForm.find('#radio_other_reason');
+      const otherReasonTextareaWrap = reasonForm.find('#other_reason');
+
+    if (checkboxDissatisfaction.prop('checked') === true ) {
+      const reason = dissatisfactionOtherReasonTextareaWarp.find('textarea');
+      const showReason = dissatisfactionOtherReasonTextareaWarp.siblings('.show_alert');
+      if ( reason.val().trim().length <= 0 ) {
+        showReason.removeClass('tw-hidden');
+        dissatisfactionOtherReasonTextareaWarp.removeClass('active:tw-border-[#1A6DFF] focus-within:tw-border-[#1A6DFF]');
+        dissatisfactionOtherReasonTextareaWarp.addClass('active:tw-border-[#DD3344] focus-within:tw-border-[#DD3344] tw-border-[#DD3344]');
+        return false;
+      } else {
+        showReason.addClass('tw-hidden');
+      }
+    }
+    if (checkboxUseOtherService.prop('checked') === true ) {
+      const reason = otherServiceeasonTextareaWarp.find('textarea');
+      const showReason = otherServiceeasonTextareaWarp.siblings('.show_alert');
+      if ( reason.val().trim().length <= 0 ) {
+        showReason.removeClass('tw-hidden');
+        otherServiceeasonTextareaWarp.removeClass('active:tw-border-[#1A6DFF] focus-within:tw-border-[#1A6DFF]');
+        otherServiceeasonTextareaWarp.addClass('active:tw-border-[#DD3344] focus-within:tw-border-[#DD3344] tw-border-[#DD3344]');
+        return false;
+      } else {
+        showReason.addClass('tw-hidden');
+      }
+    }
+    if ( radioOtherReason.prop('checked') === true ) {
+      const reason = otherReasonTextareaWrap.find('textarea');
+      const showReason = otherReasonTextareaWrap.siblings('.show_alert');
+      if (reason.val().trim().length <= 0) {
+        console.log(reason.val().trim().length);
+        showReason.removeClass('tw-hidden');
+        otherReasonTextareaWrap.removeClass('active:tw-border-[#1A6DFF] focus-within:tw-border-[#1A6DFF]');
+        otherReasonTextareaWrap.addClass('active:tw-border-[#DD3344] focus-within:tw-border-[#DD3344] tw-border-[#DD3344]');
+        return false;
+      } else {
+        showReason.addClass('tw-hidden');
+      }
+    }
+    $.cocoaDialog.close();
+    $.ajax({
+      url: "/admin/payment/update_regular_payment.cm",
+      data: { "mode": "off", "idx": idx , reasonData : reasonData },
+      type: "POST",
+      dataType: "json",
+      success: function(res){
+        if(res['msg'] === 'SUCCESS') {
+              $.cocoaDialog.open({ type: 'complete_submit_modal', custom_popup: res.html , width: 380 });
+            }
+          },
+        });
+  },
+
+  unsetRegularPayment : function(id, next_pay_date){
+        if ( confirm(getLocalizeString("설명_정기결제해지알림", next_pay_date, "정기결제 해지시 다음 결제일부터 자동 결제 처리되지 않습니다.\n지금 해지해도 %1까지는 사용이 가능합니다.\n정기결제를 해지하시겠습니까?")) ) {
+            $.ajax({
+                "url": "/admin/payment/update_regular_payment.cm",
+                "data": { "mode": "off", "idx": id },
+                "type": "POST",
+                "dataType": "json",
+                "success": function(res){
+                    if ( res['msg'] === 'SUCCESS' ) {
+                        alert(getLocalizeString("설명_정기결제해지완료",'', "정기결제 해지가 완료 되었습니다."));
+                        location.reload();
+                    } else {
+                        alert(res['msg']);
+                    }
+                }
+            });
+        }
+    },
+
+    makePriceStr: function(price){
+        var price_str = price;
+        switch ( this.country ) {
+            case KOREA_COUNTRY_CODE:
+                price_str = getLocalizeString("설명_n원", money_format(price), "%1원");
+                break;
+            case TAIWAN_COUNTRY_CODE:
+                price_str = "$" + money_format(price);
+                break;
+        }
+        return price_str;
+    },
+    openPromotionPGModal: function(promotion_pg_type) {
+        const cache_key = `promotion_pg_modal_${promotion_pg_type}`
+
+        const get_promotion_pg_modal = () => {
+            return new Promise((resolve, reject) => {
+                if (this.cache[cache_key]) {
+                    return resolve(this.cache[cache_key])
+                }
+
+                $.ajax({
+                    type: 'POST',
+                    dataType: 'html',
+                    url: '/admin/ajax/promotion_pg_modal.cm',
+                    data: { promotion_pg_type },
+                    cache: false,
+                    success: (html) => {
+                        this.cache[cache_key] = html
+
+                        resolve(this.cache[cache_key])
+                    },
+                    error: reject
+                })
+            })
+        }
+
+        get_promotion_pg_modal().then(html => {
+            const $html = $(html);
+
+            $.cocoaDialog.open({
+                type: 'promotion_pg_modal',
+                custom_popup: $html,
+                backdrop: false,
+            }, function() {
+                $html.find('._btn_submit').off('click').on('click', function() {
+                    const period_value = $html.find('#period_value').val()
+                    const period_element = $('._day_ck').find(`input[value=${period_value}]`)
+
+                    period_element.prop('checked', true)
+
+                    PRICE.setPeriod()
+                    PRICE.togglePromotionPGInfo(true);
+
+                    $.cocoaDialog.close()
+                })
+            })
+        }).catch((() => window.alert('프로모션 팝업을 불러오는도중 오류가 발생하였습니다')))
+    },
+    togglePromotionPGInfo: function(is_open) {
+        $('._promotion_pg_info').toggle(is_open)
+    },
+    handleChangeNonPeriod: function() {
+        PRICE.setPeriod()
+        PRICE.togglePromotionPGInfo(false);
+    },
+    handleChangePeriod: function(el) {
+        const allow_versions = ['pro', 'global']
+        const version = $('._extend_period_list').find('input[name=value_version]:checked').val().toLowerCase()
+        const value = $(el).val();
+
+        PRICE.setPeriod();
+
+        if (!allow_versions.includes(version)) {
+            PRICE.togglePromotionPGInfo(false);
+
+            return false
+        }
+
+        /**
+         * PG 프로모션 조건
+         * pro 버전 - 1, 3, 6개월 선택 시 띄우기
+         * global 버전 - 1, 3개월 선택 시 띄우기
+         */
+        const modal_period = {
+            pro: ['one_month', 'three_month', 'six_month'],
+            global: ['one_month', 'three_month'],
+        }[version] ?? []
+
+        if (modal_period.includes(value)) {
+            PRICE.openPromotionPGModal(version);
+            PRICE.togglePromotionPGInfo(false);
+        } else {
+            PRICE.togglePromotionPGInfo(true);
+        }
+    },
+    handleChangeVersion: function() {
+        const $el = $('input[name=rdo_term_kind]:checked')
+
+        PRICE.setVersion()
+        PRICE.handleChangePeriod($el)
+    }
+};
+
+const ADMIN_ADD_CARD = (function(){
+  const istrue = (e) => e === true;
+  const reg_num = /\D/g;
+  const reg_exception =/[a-z|A-Z|ㄱ-ㅎ|ㅏ-ㅣ|가-힣|\{\}\[\]\/?.,;:|\)~`!^\-_+<>@\#$%&\\\=\(\'\"]/g;
+  const reg_month = /^(0[1-9]|1[0-2])/g
+  // 카드 번호 유효성 검사
+  let array_card_number_check = [];
+  let array_period = [];
+  let is_personal_registration_number_check = false;
+  let is_checkbox_check = false;
+  const cardNumberCheck = function () {
+    const add_card_numb_container = document.getElementById('add_card_numb_container');
+    if(add_card_numb_container){
+      const add_card_numb_input = document.querySelectorAll('.add_card_numb_input');
+      const card_number_input_container = document.querySelector('#card_number_input_container');
+      const _alert_msg_card = document.querySelector('._alert_msg_card');
+      const isPassVaildation = (element,index) =>{
+        const length = element.value.length;
+        if(index === 3){
+          if(length <= 2) {
+            return false;
+          } else {
+            return true;
+          }
+        } else {
+          if(length <= 3){
+            return false;
+          } else {
+            return true;
+          }
+        }
+      }
+      const alertChangeCssByFlag = (flag=false) =>{
+        if(flag) {
+          card_number_input_container.classList.add('tw-border-[#EEEEEE]');
+          card_number_input_container.classList.remove('tw-border-danger-500');
+          card_number_input_container.classList.remove('tw-mb-[8px]');
+        } else {
+          card_number_input_container.classList.remove('tw-border-[#EEEEEE]');
+          card_number_input_container.classList.add('tw-border-danger-500');
+          card_number_input_container.classList.add('tw-mb-[8px]');
+        }
+      }
+
+      add_card_numb_input.forEach((element,index) => {
+        element.addEventListener('keydown',(event)=>{
+          if (event.key === '*') {
+            event.preventDefault();
+          }
+        })
+        element.addEventListener('focusout' , (event)=>{
+          let is_card_number_pass = false;
+          element.value = element.value.replace(reg_exception,'');
+          is_card_number_pass = isPassVaildation(element,index);
+          array_card_number_check[index] = is_card_number_pass;
+          alertChangeCssByFlag(is_card_number_pass);
+          if(array_card_number_check.every(istrue)){
+            _alert_msg_card.innerHTML = '';
+            activateButton();
+          } else{
+            if(element.value.length === 0){
+              _alert_msg_card.innerHTML = '카드번호를 입력해 주세요.';
+            } else if(element.value.length <4){
+              _alert_msg_card.innerHTML = '유효하지 않은 카드번호입니다.';
+            }
+            alertChangeCssByFlag();
+            activateButton();
+          }
+        })
+      })
+    }
+  }
+  // 유효기간 유효성 검사
+  const periodCheck = function () {
+    const expiration_period_container = document.getElementById('expiration_period_container');
+    const expiration_input = expiration_period_container.querySelectorAll('.expiration_input');
+    const _alert_msg_expiration = expiration_period_container.querySelector('._alert_msg_expiration');
+    const _expiration__input = expiration_period_container.querySelector('._expiration__input');
+    expiration_input.forEach((el, i) =>{
+      el.addEventListener('focusout',()=>{
+        el.value = el.value.replace(reg_num,'');
+
+        if(el.value.length === 0) {
+          array_period[i] = false;
+          activateButton();
+        } else if( expiration_input[0].value.replace(reg_month,'') ||  el.value.length < 2 ) {
+          array_period[i] = false;
+          activateButton();
+        } else if(el.value.length === 2) {
+          array_period[i] = true;
+          activateButton();
+        }
+
+        if(array_period.every(istrue)){
+          _expiration__input.classList.add('tw-border-[#E0E0E0]');
+          _expiration__input.classList.remove('tw-border-danger-500','tw-mb-[8px]');
+          _alert_msg_expiration.innerHTML = '';
+          activateButton();
+        } else if(el.value.length === 0) {
+          _expiration__input.classList.remove('tw-border-[#E0E0E0]');
+          _expiration__input.classList.add('tw-border-danger-500','tw-mb-[8px]');
+          _alert_msg_expiration.innerHTML = '유효기간을 입력해 주세요.';
+          activateButton();
+        } else if( expiration_input[0].value.replace(reg_month,'') ||  el.value.length < 2 ) {
+          _expiration__input.classList.remove('tw-border-[#E0E0E0]');
+          _expiration__input.classList.add('tw-border-danger-500','tw-mb-[8px]');
+          _alert_msg_expiration.innerHTML = '유효기간을 입력해 주세요.';
+          activateButton();
+        }
+      })
+    })
+  }
+  // 주민등록번호 유효성 검사
+  const personalRegistrationNumberCheck = function() {
+    const card_type_container_input = document.querySelectorAll('input[name="card_type"]');
+    const personal_registration_number_container = document.getElementById('personal_registration_number_container');
+    const personal_registration_number_input = personal_registration_number_container.querySelector('.personal_registration_number_input');
+    const _alert_msg_personal_registration_number = personal_registration_number_container.querySelector('._alert_msg_personal_registration_number');
+    let check_personal_registration_number_input = '';
+    personal_registration_number_input.addEventListener('focusout',(el)=>{
+      card_type_container_input.forEach(el=>{
+        if(el.checked){
+          check_personal_registration_number_input = el.value;
+        }
+      })
+      el.target.value = el.target.value.replace(reg_num ,'');
+      if(el.target.value === ''){
+        el.target.classList.remove('tw-border-b-[#E0E0E0]');
+        el.target.classList.add('tw-border-b-danger-500','tw-mb-[8px]');
+        is_personal_registration_number_check = false;
+        activateButton();
+        check_personal_registration_number_input === "personal" ? _alert_msg_personal_registration_number.innerHTML = '생년월일을 입력하세요.' : _alert_msg_personal_registration_number.innerHTML = '사업자등록번호를 입력하세요.';
+      } else if(el.target.value.length !== 6 && check_personal_registration_number_input === "personal") {
+        el.target.classList.remove('tw-border-b-[#E0E0E0]');
+        el.target.classList.add('tw-border-b-danger-500','tw-mb-[8px]');
+        _alert_msg_personal_registration_number.innerHTML = '생년월일 6자리를 입력하세요.';
+        is_personal_registration_number_check = false;
+        activateButton();
+      }  else if(el.target.value.length !== 10 && check_personal_registration_number_input === "business") {
+        el.target.classList.remove('tw-border-b-[#E0E0E0]');
+        el.target.classList.add('tw-border-b-danger-500','tw-mb-[8px]');
+        _alert_msg_personal_registration_number.innerHTML = '사업자등록번호를 입력하세요.';
+        is_personal_registration_number_check = false;
+        activateButton();
+      }
+      else {
+        el.target.classList.add('tw-border-b-[#E0E0E0]');
+        el.target.classList.remove('tw-border-b-danger-500','tw-mb-[8px]');
+        _alert_msg_personal_registration_number.innerHTML = '';
+        is_personal_registration_number_check = true;
+        activateButton();
+      }
+    })
+
+  }
+  // 정책 동의 체크 검사
+  const checkAgreePolicy = function () {
+    const checkbox_policy_container = document.getElementById('checkbox_policy_container');
+    const policy_agree_check_all = checkbox_policy_container.querySelector('#policy_agree_check_all');
+    const _agree = checkbox_policy_container.querySelectorAll('._agree');
+    const btn_new_card_enroll = document.querySelector('#btn_new_card_enroll');
+    const _alert_msg_policy = document.querySelector('._alert_msg_policy');
+    let alert_policy_check_array = [];
+
+    _agree.forEach((el,i) =>{
+      el.addEventListener('change',()=>{
+        _agree.forEach(e =>{ e.checked ? alert_policy_check_array.push(_agree[i].checked) : alert_policy_check_array.pop(); })
+        if (alert_policy_check_array.length === 5 ) {  // 동의하기 체크박스가 다 체크 되었을 경우
+          policy_agree_check_all.checked = true;
+          alert_policy_check_array = [];
+          is_checkbox_check = true;
+          activateButton();
+        }
+        if(el.checked === false){ // 동의하기 체크박스가 하나라도 체크 안되었을 경우
+          policy_agree_check_all.checked = false;
+          is_checkbox_check = false;
+          activateButton();
+        }
+        alert_policy_check_array = [];
+      })
+    })
+
+    policy_agree_check_all.addEventListener('change',()=>{ // 전체 선택 버튼 기능
+      if(!policy_agree_check_all.checked ) {
+        _agree.forEach(el => {
+          el.checked = false;
+          is_checkbox_check = false;
+          activateButton();
+        })
+      } else {
+        _agree.forEach(el => {
+          el.checked = true;
+          is_checkbox_check = true;
+          activateButton();
+        })
+      }
+    })
+
+    btn_new_card_enroll.addEventListener('click',()=>{  //등록하기 버튼 Event
+      _agree.forEach(el=> {
+        if(el.checked){alert_policy_check_array.push(el.getAttribute('checked'))}
+      })
+      alert_policy_check_array.length < 4 ? _alert_msg_policy.innerHTML = '모든 이용약관에 동의해 주세요.' : _alert_msg_policy.innerHTML = '';
+      alert_policy_check_array = []; // array reset
+    })
+  }
+  //focus 자동 이동
+  const focusMove = function (){
+    const add_credit_card_container = document.getElementById('add_credit_card_container');
+    const _card_focus = add_credit_card_container.querySelectorAll('._card_focus');
+    _card_focus.forEach((el, i) => {
+      el.addEventListener('keyup',(e)=>{
+        if(el.classList.contains('add_card_numb_input') && el.value.length === 4 ) {
+          _card_focus[i+1].focus();
+        } else if(el.classList.contains('expiration_input') && el.value.length === 2){
+          _card_focus[i+1].focus();
+        }
+      })
+    })
+  }
+  //버튼 활성화
+  const activateButton = function () {
+    const add_credit_card_container = document.getElementById('add_credit_card_container');
+    const btn_new_card_enroll = add_credit_card_container.querySelector('#btn_new_card_enroll');
+    const _alert_msg = {
+      card: add_credit_card_container.querySelector('._alert_msg_card'),
+      expiration: add_credit_card_container.querySelector('._alert_msg_expiration'),
+      personal_registration_number: add_credit_card_container.querySelector('._alert_msg_personal_registration_number'),
+    }
+
+    if(is_checkbox_check && is_personal_registration_number_check && array_period.every(istrue) && array_card_number_check.every(istrue)){
+      btn_new_card_enroll.removeAttribute('disabled');
+    } else {
+      btn_new_card_enroll.setAttribute('disabled',true);
+    }
+  }
+  // 카드 버튼 등록하기
+  const addCreditCard = function () {
+    const add_credit_card_container = document.getElementById('add_credit_card_container');
+    const btn_new_card_enroll = add_credit_card_container.querySelector('#btn_new_card_enroll');
+    let submit_flag = true;
+    btn_new_card_enroll.addEventListener('click',(idx)=>{
+      const data = $('#add_credit_card_container').find('form').serializeObject();
+      if(submit_flag) {
+        submit_flag = false;
+        btn_new_card_enroll.setAttribute('disabled',true);
+        $.ajax({
+          type : 'POST',
+          url : '/payment/index.cm',
+          data: data,
+          cache : false,
+          success : function(result){
+            let reason = '';
+            const response =  JSON.parse(result);
+            const auth_result = response.resultCode;
+            if(auth_result == 'imweb01'){ // 아임웹 자체 에러메시지 처리
+              reason = response.resultMsg;
+            } else { // 이니시스 api 에러인 경우 에러메시지 문자열 처리
+              const reason_arr = response.resultMsg.split('|'); // err_msg 문자열 분리
+              reason = reason_arr[reason_arr.length-1].slice(0,-1);  // err_msg ']' 제거
+            }
+            let url_endpoint = ''
+            switch (auth_result){
+              case '00':
+                alert("카드가 등록되었습니다.");
+                $.cocoaDialog.close();
+                location.reload();
+                // PAYMENT_PASSWORD.hasOwnPaymentPassword('register','admin','site_admin',$("#sel_site").val());
+                break;
+              case '01':
+                alert(reason+"입니다.");
+                submit_flag = true;
+                btn_new_card_enroll.removeAttribute('disabled');
+                break;
+              default:
+                alert(reason+"입니다.");
+                submit_flag = true;
+                btn_new_card_enroll.removeAttribute('disabled');
+                break;
+            }
+          },
+          error : function(res){
+          },
+        });
+      }
+    })
+  }
+  const registerRegularlyCard = function(){
+    $.ajax({
+      type : 'POST',
+      url : '/payment/manage_credit_card/bo_register_credit_card.cm',
+      dataType : 'json',
+      cache : false,
+      success : function(result){
+        if(result.msg == 'SUCCESS'){
+          $.cocoaDialog.close();
+          $.cocoaDialog.open({type : 'register_payment_method', custom_popup : result.html, pc_width: 368, }, function(){
+            $(window).scroll(function() { return false; });
+            addCreditCard();
+            focusMove();
+            personalRegistrationNumberCheck();
+            periodCheck();
+            cardNumberCheck();
+            checkAgreePolicy();
+            activateButton();
+          });
+        }
+      },
+      error : function (res) {
+
+      }
+    });
+  }
+  const updateRegularlyInfo = function(){
+    const form = $("#credit_card_change_info_form");
+    const data = form.serializeObject();
+    $.ajax({
+      data: data,
+      type : 'POST',
+      url : '/payment/index.cm',
+      dataType : 'json',
+      cache : false,
+      success : function(res){
+        if(res.result == 'SUCCESS'){
+          location.reload();
+        }
+      },
+      error : function(res){
+      }
+    });
+  }
+  const updateRegularlyPeriod = function(){
+    const form = $("#credit_card_change_info_form");
+    const data = form.serializeObject();
+    $.ajax({
+      data: data,
+      type : 'POST',
+      url : '/payment/index.cm',
+      dataType : 'json',
+      cache : false,
+      success : function(res){
+        if(res.result == 'SUCCESS'){
+          location.reload();
+        }
+      },
+      error : function(res){
+      }
+    });
+  }
+
+  const modalChangeInfoCreditCard = function(param, data) {
+    const from_admin_site = 'site_admin';
+    if(param){
+      alert ('결제 정보를 변경할 수 없습니다.');
+      return;
+    }
+    let dataJson = {
+      idx : data,
+      access_location : from_admin_site,
+    }
+    $.ajax({
+      type : 'POST',
+      url : ('/payment/manage_credit_card/modal_credit_card_change_info.cm'),
+      data: dataJson,
+      dataType: 'json',
+      async : false,
+      cache : false,
+      success : function(result) {
+        if(result.msg == 'SUCCESS'){
+          $.cocoaDialog.close();
+          $.cocoaDialog.open({ type: "credit_card_change_info", custom_popup: result.html, pc_width: 348, width:348 },function(){
+          });
+        } else {
+          alert(result.msg);
+        }
+      },
+      error: function(res) {
+        console.log(res);
+      }
+    })
+  }
+  const modalChangePeriodCreditCard = function(idx) {
+    const from_admin_site = 'site_admin';
+    $.ajax({
+      type : 'POST',
+      url : ('/payment/manage_credit_card/modal_credit_card_change_period.cm'),
+      data : {
+        idx: idx,
+        access_location : from_admin_site,
+      },
+      dataType: 'json',
+      async : false,
+      cache : false,
+      success : function(result) {
+        $.cocoaDialog.close();
+        $.cocoaDialog.open({ type: "credit_card_change_info", custom_popup: result.html, pc_width: 565, width:348, },function(){
+        });
+      },
+      error: function(res) {
+        console.log(res);
+      }
+    })
+  }
+
+  const setValueQueryString = function(){
+    const term = $("input[name=rdo_term_kind]:checked").val();
+    const upgrade = $("input[name=value_version]:checked").val();
+    if(!(term === "coupon" || term === "non_extension")){
+      let params = new URLSearchParams(location.search);
+      const setOrAppendUrl = (name, value) =>{
+        if(params.has(name)){
+          params.set(name, value);
+        } else {
+          params.append(name, value);
+        }
+      }
+      setOrAppendUrl('term',term);
+      setOrAppendUrl('upgrade',upgrade);
+      location.search = params.toString();
+    }
+  }
+  const reloadedValueCheck = () =>{
+    function searchParam(key) {
+      return new URLSearchParams(location.search).get(key);
+    };
+    function hasUrlQuery(key) {
+      return new URLSearchParams(location.search).has(key);
+    };
+    if(hasUrlQuery('term')){
+      switch (searchParam('term')){
+        case "one_month" : $("input:radio[name=rdo_term_kind]:input[value='one_month']").prop("checked", true);
+          break;
+        case "three_month" : $("input:radio[name=rdo_term_kind]:input[value='three_month']").prop("checked", true);
+          break;
+        case "six_month" : $("input:radio[name=rdo_term_kind]:input[value='six_month']").prop("checked", true);
+          break;
+        case "one_year" : $("input:radio[name=rdo_term_kind]:input[value='one_year']").prop("checked", true);
+          break;
+        default: $("input:radio[name=rdo_term_kind]:input[value='one_year']").prop("checked", true);
+      }
+      switch (searchParam('upgrade')){
+        case  "free" : $("input:radio[name=value_version]:input[value='free']").prop("checked", true);
+          break;
+        case  "starter" : $("input:radio[name=value_version]:input[value='starter']").prop("checked", true);
+          break;
+        case  "pro" : $("input:radio[name=value_version]:input[value='pro']").prop("checked", true);
+          break;
+        case  "global" : $("input:radio[name=value_version]:input[value='global']").prop("checked", true);
+          break;
+      }
+    }
+  }
+  const removeQueryValue = () =>{
+    const end_point = location.pathname + '?payment&';
+    history.replaceState({}, null, end_point);
+  }
+  return {
+    registerRegularlyCard: function () {
+      registerRegularlyCard();
+    },
+    modalChangeInfoCreditCard: function (param , idx) {
+      modalChangeInfoCreditCard(param, idx);
+    },
+    modalChangePeriodCreditCard: function (idx) {
+      modalChangePeriodCreditCard(idx);
+    },
+    updateRegularlyInfo: function () {
+      updateRegularlyInfo();
+    },
+    updateRegularlyPeriod: function () {
+      updateRegularlyPeriod();
+    },
+    setValueQueryString: function () {
+      setValueQueryString();
+    },
+    reloadedValueCheck: function () {
+      reloadedValueCheck();
+    },
+    removeQueryValue: function () {
+      removeQueryValue();
+    },
+  }
+})();

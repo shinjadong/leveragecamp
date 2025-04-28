@@ -1,0 +1,32 @@
+function DATA(){
+	this.data = {};
+	this.add = dataAdd;
+	this.get = dataGet;
+	this.remove = dataRemove;
+	this.count = dataCount;
+	this.clear = dataClear;
+}
+function dataAdd(key,value){
+	if($.isPlainObject(value) && $.isPlainObject(this.get(key))){
+		var value = $.extend(this.get(key),value);
+	}
+	this.data[key] = value;
+}
+
+function dataGet(key){
+	return this.data[key];
+
+}
+function dataRemove(key){
+	delete this.data[key];
+}
+function dataCount(){
+	var cnt = 0;
+	for (var key in Object.keys(this.data)){
+		cnt++;
+	}
+	return cnt;
+}
+function dataClear(){
+	this.data = {};
+}

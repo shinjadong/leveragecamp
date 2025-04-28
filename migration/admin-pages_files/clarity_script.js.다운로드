@@ -1,0 +1,34 @@
+class ClarityScript {
+    constructor() {
+        this.CLARITY_PROJECT_ID = {
+            LIVE_SERVER: {
+                MAIN: "gy3ywfkr1h",
+                ADMIN: "gy4ajmqjno",
+                DESIGNMODE: "gy4feii684",
+            },
+            TEST_SERVER: {
+                MAIN: "gy49b26ww7",
+                ADMIN: "irsa0mwyxz",
+                DESIGNMODE: "gy4f2qcdc2",
+            }
+        }
+
+        this.projectId = null;
+    }
+
+    setClarityScript(project_id) {
+        if(!project_id) {
+            return false;
+        };
+
+        this.projectId = project_id;
+
+        (function(c,l,a,r,i,t,y){
+            c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+            t=l.createElement(r);t.defer=true;t.src="https://www.clarity.ms/tag/"+i;
+            y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+        })(window, document, "clarity", "script", this.projectId);
+
+        return true;
+    };
+}

@@ -1,0 +1,1761 @@
+var ADMIN = (function(){
+	
+	var init = function(){
+		
+	};
+	
+	var openProfile = function(){
+		$.ajax({
+			type: 'POST',
+			data: {},
+			url: ('/admin/ajax/dialog/profile.cm'),
+			dataType: 'html',
+			async: false,
+			cache: false,
+			success: function (res) {
+				var $html = $(res);
+				$.cocoaDialog.open({type:'mypage',custom_popup:$html});
+			}
+		});
+	};
+
+	var openOpinion = function(){
+		$.ajax({
+			type: 'POST',
+			data: {},
+			url: ('/admin/ajax/dialog/opinion.cm'),
+			dataType: 'html',
+			async: false,
+			cache: false,
+			success: function (res) {
+				var $html = $(res);
+				$.cocoaDialog.open({type:'opinion',custom_popup:$html});
+			}
+		});
+	};
+
+	var showLoader = function(){
+		$('#dashboard_loader').show();
+	};
+
+	var hideLoader = function(){
+		$('#dashboard_loader').hide();
+	};
+
+    /***
+	 * 관리자페이지 언어 변경처리
+     * @param lang
+     */
+	var changeAdminLang = function(lang){
+        $.ajax({
+            type: 'POST',
+            data: {'lang':lang},
+            url: ('/admin/ajax/change_admin_lang.cm'),
+            dataType: 'json',
+            async: false,
+            cache: false,
+            success: function (res) {
+            	if(res.msg == 'SUCCESS'){
+					location.href = res.back_url;
+				}else{
+            		console.log(res.msg);
+				}
+            }
+        });
+	};
+
+	return {
+		init : function(){
+			init();
+		},
+		openProfile : function(){
+			openProfile();
+		},
+		openOpinion : function(){
+			openOpinion();
+		},
+		showLoader : function(){
+			showLoader();
+		},
+		hideLoader : function(){
+			hideLoader();
+		},
+        changeAdminLang : function(lang){
+			changeAdminLang(lang);
+		}
+	};
+})();
+var HEADER_CONTROL = function(){
+	var $header, $option_list,$footer_option_list;
+	var btn_list = [];
+	var btn_type = {
+		"save": {
+			key : 'save',
+			name : getLocalizeString("버튼_저장", "", "저장"),
+			changing : true
+		},
+		"add": {
+			key : 'add',
+			name : getLocalizeString("버튼_추가", "", "추가"),
+			changing : true
+		},
+		"cancel": {
+			key : 'cancel',
+			name : getLocalizeString("버튼_취소", "", "취소"),
+			changing : false
+		},
+		"delete": {
+			key : 'delete',
+			name : getLocalizeString("버튼_삭제", "", "삭제"),
+			changing : false
+		},
+		"navi": {
+			key : 'navi',
+			name : 'navi',
+			changing : false
+		}
+	};
+	var init = function(){
+		$header = $('#header');
+		$option_list = $header.find('._option_list');
+		$footer_option_list = $('<div />');
+		$('#content').find("section").append($footer_option_list);
+
+		$(window).bind('beforeunload', function(){
+			if(!$(".headerbar").find(".btn-primary").hasClass('disabled')){
+				return getLocalizeString("설명_변경사항이저장되지않을", "", "변경사항이 저장되지 않을 수 있습니다.");
+			}
+		});
+	};
+
+	var init2 = function($save_btn_bottom_wrap){
+		$header = $('#header');
+		$option_list = $header.find('._option_list');
+		$footer_option_list = $('<div />');
+		if( $save_btn_bottom_wrap !== undefined ){
+			$save_btn_bottom_wrap.append($footer_option_list);
+		}
+
+
+		$(window).bind('beforeunload', function(){
+			if(!$(".headerbar").find(".btn-primary").hasClass('disabled')){
+				return getLocalizeString("설명_변경사항이저장되지않을", "", "변경사항이 저장되지 않을 수 있습니다.");
+			}
+		});
+	};
+
+	var addBtn = function(type, callback){
+		switch(type){
+			case 'save' :
+			case 'add' :
+				var $footer_btn_wrap;
+				var $footer_btn;
+				var $btn_wrap = $('<li />');
+				var $btn = $('<a class="btn btn-primary" />')
+					.text(btn_type[type].name)
+					.toggleClass('disabled', btn_type[type].changing)
+					.data({
+						btn_data : btn_type[type],
+						changing : false
+					});
+				if(typeof callback == 'function'){
+					$btn.off('click').on('click', function(){
+						if($(this).data('changing') || !btn_type[type].changing){
+							callback();
+						}
+					});
+				}
+				$footer_btn_wrap = $btn_wrap.clone();
+				$footer_btn = $btn.clone(true);
+
+				$btn_wrap.append($btn);
+				$option_list.append($btn_wrap);
+				btn_list.push($btn);
+
+				$footer_option_list.append($footer_btn);
+				btn_list.push($footer_btn);
+				break;
+			case 'delete' :
+			case 'cancel' :
+				var $btn_wrap = $('<li />');
+				var $btn = $('<a class="btn btn-default-bright" href="javascript:;" />')
+					.text(btn_type[type].name)
+					.data({
+					btn_data : btn_type[type]
+				});
+				if(typeof callback == 'function'){
+					$btn.off('click').on('click', function(){
+						callback();
+					});
+				}
+
+				$btn_wrap.append($btn);
+				$option_list.append($btn_wrap);
+				btn_list.push($btn);
+				break;
+			case 'navi' :
+				var $btn_wrap = $('<li />');
+				var $btn_group = $('<div class="btn-group" role="group" aria-label="button group" />');
+				var $btn_prev = $('<a class="btn btn-default-bright" href="javascript:;" role="button"/><i class="btl bt-angle-left" /></a>').data({
+					btn_data : btn_type[type]
+				});
+				var $btn_next = $('<a class="btn btn-default-bright" href="javascript:;" role="button"/><i class="btl bt-angle-right" /></a>').data({
+					btn_data : btn_type[type]
+				});
+				if(typeof callback == 'function'){
+					$btn_prev.off('click').on('click', function(){
+						callback('prev');
+					});
+					$btn_next.off('click').on('click', function(){
+						callback('next');
+					});
+				}
+				$btn_group.append($btn_prev);
+				$btn_group.append($btn_next);
+				$btn_wrap.append($btn_group);
+				$option_list.append($btn_wrap);
+				btn_list.push($btn);
+				break;
+		}
+
+	};
+	var change = function(){
+		$.each(btn_list, function(e, $v){
+			if($v.data('btn_data').changing){
+				$v.toggleClass('disabled', false).data({
+					changing : true
+				});
+			}
+		});
+	};
+
+	var save = function(){
+		$.each(btn_list, function(e, $v){
+			if($v.data('btn_data').changing){
+				$v.toggleClass('disabled', true).data({
+					changing : false
+				});
+			}
+		});
+	};
+
+	var isChange = function(){
+		var is = false;
+		$.each(btn_list, function(e, $v){
+			if($v.data('btn_data').changing){
+				if($v.data('changing')){
+					is = true;
+					return false;
+				}
+			}
+		});
+		return is;
+	};
+
+
+	return {
+		init : function(){
+			init();
+		},
+		init2: function($save_btn_bottom_wrap){
+			init2($save_btn_bottom_wrap);
+		},
+		change : function(){
+			change();
+		},
+		save : function(){
+			save();
+		},
+		addBtn : function(type, callback){
+			addBtn(type, callback);
+		},
+		isChange : function(){
+			return isChange();
+		}
+	};
+};
+
+var IDENTITY_VERIFICATION_POPUP = function(){
+  const openVerificationPopup = function(){
+    $.ajax({
+      type : 'GET',
+      url : ('/admin/ajax/dialog/popup_identity_verification.cm'),
+      dataType: 'html',
+      async: false,
+      cache: false,
+      success: function (res) {
+        var $html = $(res);
+        $.cocoaDialog.open({type:'verification_popup', custom_popup:$html});
+      }
+    });
+  };
+  return {
+    openVerificationPopup : function(){
+      openVerificationPopup();
+    },
+  };
+}()
+var SADMIN_POPUP = (function(){
+	var openPopup = function(issue){
+		if(typeof issue == 'undefined')
+			issue = '';
+		$.ajax({
+			type : 'POST',
+			data : {'issue' : issue},
+			url : ('/admin/ajax/dialog/popup.cm'),
+			dataType: 'html',
+			async: false,
+			cache: false,
+			success: function (res) {
+				var $html = $(res);
+				$.cocoaDialog.open({type:'admin',custom_popup:$html});
+			}
+		});
+	};
+
+  var openPopupExpire = function(popup_type, remain_period){
+    $.ajax({
+      type : 'POST',
+      data : {
+        'popup_type' : popup_type,
+        'remain_period' : remain_period
+      },
+      url : ('/admin/ajax/dialog/popup_expire.cm'),
+      dataType: 'html',
+      async: false,
+      cache: false,
+      success: function (res) {
+        var $html = $(res);
+        if($html) {
+          $.cocoaDialog.open({type:'alert_expire',custom_popup:$html});
+        }
+      }
+    });
+  };
+
+  const openPopupCrmService = () => {
+		$.ajax({
+			type: 'GET',
+			url: '/admin/ajax/dialog/popup_crm_service.cm',
+			dataType: 'html',
+			async: false,
+			cache: false,
+			success: function(res) {
+				const $html = $(res);
+				if($html){
+					$.cocoaDialog.open({
+						type: 'ad_service',
+						custom_popup: $html,
+						pc_width: 380,
+					});
+
+					const setCookieTodayExpire = function(name, value) {
+						const today = new Date();
+				
+						today.setDate(today.getDate() + 14);
+				
+						document.cookie = name + "=" + encodeURIComponent(value) + "; path=/; expires=" + today.toUTCString() + ";";
+					}
+
+					$('#_close_btn_crm_service_popup').off('click').on('click', function() {
+						setCookieTodayExpire('close_popup_crm_promotion', 'Y');
+						$.cocoaDialog.close();
+					});
+				}
+			}
+		});
+  };
+  const openPopupCrmCouponService = () => {
+	if(window.location.search) {
+		return;
+	}
+
+
+		$.ajax({
+			type: 'GET',
+			url: '/admin/ajax/dialog/popup_crm_service-coupon.cm',
+			dataType: 'html',
+			async: false,
+			cache: false,
+			success: function(res) {
+				const $html = $(res);
+				if($html){
+					$.cocoaDialog.open({
+						type: 'ad_service',
+						custom_popup: $html,
+						pc_width: 380,
+					});
+
+					const setCookieTodayExpire = function(name, value) {
+						const today = new Date();
+				
+						today.setDate(today.getDate() + 7);
+				
+						document.cookie = name + "=" + encodeURIComponent(value) + "; path=/; expires=" + today.toUTCString() + ";";
+					}
+
+					$('#_close_btn_crm_service_popup').off('click').on('click', function() {
+						$.cocoaDialog.close();
+					});
+					$('#_close_seven_day_btn_crm_service_popup').off('click').on('click', function() {
+						setCookieTodayExpire('close_popup_crm_coupon', 'Y');
+						$.cocoaDialog.close();
+					});
+				}
+			}
+		});
+  };
+  const openPopupAdService = () => {
+		$.ajax({
+			type: 'GET',
+			url: ('/admin/ajax/dialog/popup_ad_service.cm'),
+			dataType: 'html',
+			async: false,
+			cache: false,
+			success: function(res) {
+				const $html = $(res);
+				if($html){
+					$.cocoaDialog.open({
+						type: 'ad_service',
+						custom_popup: $html,
+						pc_width: 380,
+					});
+
+					const setCookieTodayExpire = function(name, value) {
+						const today = new Date();
+				
+						today.setDate(today.getDate() + 12);
+				
+						document.cookie = name + "=" + encodeURIComponent(value) + "; path=/; expires=" + today.toUTCString() + ";";
+					}
+
+					$('#_close_btn_ad_service_popup').off('click').on('click', function() {
+						setCookieTodayExpire('close_popup_ad_promotion', 'Y');
+						$.cocoaDialog.close();
+					});
+				}
+			}
+		});
+  };
+
+	const openPopupFcmHttpV1 = () => {
+		$.ajax({
+			type: 'GET',
+			url: ('/admin/ajax/dialog/popup_fcm_httpv1.cm'),
+			dataType: 'html',
+			async: false,
+			cache: false,
+			success: function(res) {
+				const $html = $(res);
+				if($html){
+					$.cocoaDialog.open({
+						type: 'fcm_httpv1',
+						custom_popup: $html,
+						pc_width: 380,
+					});
+
+					const setCookieTodayExpire = function(name, value) {
+						const today = new Date();
+
+						today.setHours(23);
+						today.setMinutes(59);
+						today.setSeconds(59);
+
+						document.cookie = name + "=" + encodeURIComponent(value) + "; path=/; expires=" + today.toUTCString() + ";";
+					}
+
+					$('#_close_btn_fcm_httpv1_popup').off('click').on('click', function() {
+						setCookieTodayExpire('CLOSE_POPUP_FCM_HTTPV1', 'Y');
+						$.cocoaDialog.close();
+					});
+				}
+			}
+		});
+	};
+
+	const openPopupTiktokWebinar = () => {
+		$.ajax({
+			type: 'GET',
+			url: ('/admin/ajax/dialog/popup_tiktok_webinar.cm'),
+			dataType: 'html',
+			async: false,
+			cache: false,
+			success: function(res) {
+				const $html = $(res);
+				if($html){
+					$.cocoaDialog.open({
+						type: 'ad_service',
+						custom_popup: $html,
+						pc_width: 380,
+					});
+	
+					$('#_close_btn_tiktok_webinar').off('click').on('click', function() {
+						setCookie('close_popup_tiktok_webinar', 'Y', 365);
+						$.cocoaDialog.close();
+					});
+				}
+			}
+		});
+	};
+
+  const openPopupImwebPrivacyAgree = function(){
+	  $.ajax({
+		  type : 'POST',
+		  data : {},
+		  url : ('/admin/ajax/dialog/popup_imweb_privacy_agree.cm'),
+		  dataType: 'html',
+		  async: false,
+		  cache: false,
+		  success: function (res) {
+			  var $html = $(res);
+			  if($html) {
+				  $.cocoaDialog.open({type:'alert_expire',custom_popup:$html}, function(){
+					  $html.find('#imweb_privacy_agree_btn').on('click', function(){
+						  if(!$html.find('#imweb_privacy_agree').prop('checked')){
+							  alert('개인정보처리방침 동의는 필수입니다.');
+							  return;
+						  }
+						  var payload = {
+							  'privacy_agree' : $html.find('#imweb_privacy_agree').prop('checked')? 'Y' : 'N',
+							  'marketing_agree' : $html.find('#imweb_marketing_agree').prop('checked')? 'Y' : 'N',
+						  };
+						  $.ajax({
+							  type : 'POST',
+							  data : payload,
+							  url : ('/admin/ajax/imweb_privacy_agree.cm'),
+							  dataType: 'JSON',
+							  async: false,
+							  cache: false,
+							  success: function (res) {
+								  if(res.msg != 'SUCCESS'){
+									  alert(res.msg);
+								  }else{
+									  location.reload();
+								  }
+							  }
+						  });
+
+					  });
+				  });
+			  }
+		  }
+	  });
+  }
+
+  return {
+    openPopup : function(issue){
+      openPopup(issue);
+    },
+    openPopupExpire : function(popup_type, remain_period) {
+      openPopupExpire(popup_type, remain_period);
+    },
+		openPopupCrmService: function() {
+			openPopupCrmService();
+		},
+		openPopupCrmCouponService: function() {
+			openPopupCrmCouponService();	
+		},
+		openPopupAdService: function() {
+			openPopupAdService();
+		},
+		openPopupTiktokWebinar: function() {
+			openPopupTiktokWebinar();
+		},
+	  openPopupImwebPrivacyAgree : function(){
+		  openPopupImwebPrivacyAgree();
+	  },
+	  openPopupFcmHttpV1: function() {
+		  openPopupFcmHttpV1();
+	  },
+  };
+})();
+
+var ADMIN_POPUP = (function(){
+	const setCookieTodayExpires = function(name, value) {
+		const today = new Date();
+
+		today.setHours(23);
+		today.setMinutes(59);
+		today.setSeconds(59);
+
+		document.cookie = name + "=" + encodeURIComponent(value) + "; path=/; expires=" + today.toUTCString() + ";";
+	}
+
+	const changeBackdropColor = (bgColor = 'rgba(0, 0, 0, 0.15)') => {
+		const $backdrop = $('.modal-backdrop.in');
+
+		$backdrop.css('background-color', bgColor);
+		$backdrop.css('opacity', 1);
+	}
+
+	// 컨텐츠 영역이 backdrop 부분을 가려 모달이 닫히지 않을 경우 해당 함수 사용
+	const attachCloseEventOnModalDialog = (type, selector) => {
+		const $dialog = $(`.modal_${type}`).find(selector);
+
+		$dialog.on('click', function(e) {
+			const event = e.originalEvent;
+
+			if (event.target === event.currentTarget) {
+				$.cocoaDialog.hide();
+			}
+		});
+	}
+
+	var openPopupGiftNudge = function() {
+		const COOKIE_NAME = 'close_popup_gift_nudge';
+
+		$.ajax({
+			type: 'GET',
+			url: '/admin/ajax/dialog/popup_gift_nudge.cm',
+			dataType: 'html',
+			async: false,
+			cache: false,
+			success: function(res) {
+				const $html = $(res);
+
+				const callback = () => {
+					const $animationContainer = document.querySelector('._animation-container');
+					const $submitButton = $('._btn_submit');
+					const $closeButton = $('._btn-close');
+
+					const animation = bodymovin.loadAnimation({
+						container: $animationContainer,
+						path: '/admin/json/gift-nudge-visual.json',
+						renderer: 'svg',
+						rendererSettings: {
+							preserveAspectRatio: 'xMaxYMax meet',
+							filterSize: {
+								width: '200%',
+								height: '200%',
+								x: '-50%',
+								y: '-50%',
+							}
+						}
+					});
+
+					$submitButton.on('click', () => {
+						$.ajax({
+							type: 'POST',
+							url: '/admin/enable_gift_by_popup.cm',
+							dataType: 'json',
+							async: false,
+							cache: false,
+							success: function(res) {
+								if (res.msg === 'SUCCESS') {
+									location.href = '/admin/shopping/gift';
+								}else{
+									alert(res.msg);
+								}
+							}
+						});
+					});
+
+					$closeButton.on('click', function() {
+						setCookieTodayExpires(COOKIE_NAME, 'Y');
+
+						$.cocoaDialog.close();
+					});
+
+					$.cocoaDialog.obj.on('hidden.bs.modal', () => {
+						animation.destroy();
+					});
+				};
+
+				$.cocoaDialog.open({ type: 'gift_nudge', custom_popup: $html, pc_width: 380 }, callback);
+			}
+		});
+	}
+
+	var openOMSTransitionPendingModal = function() {
+		const COOKIE_NAME = 'close_oms_transition_pending_modal';
+
+		$.ajax({
+			type: 'GET',
+			url: '/admin/ajax/dialog/commerce_bo/20250508_oms_transition_pending_modal.cm',
+			dataType: 'html',
+			async: false,
+			cache: false,
+			success: function(res) {
+				const $html = $(res);
+
+				const callback = () => {				
+					const $closeButton = $('._btn-close');
+					$closeButton.on('click', function() {
+						setCookieTodayExpires(COOKIE_NAME, 'Y');
+						$.cocoaDialog.close();
+					});
+
+					const $close2Button = $('._btn-close2');
+					$close2Button.on('click', function() {
+						$.cocoaDialog.close();
+					});
+					
+					const $animationContainer = document.querySelector('._animation-container');
+					const animation = bodymovin.loadAnimation({
+						container: $animationContainer,
+						path: '/admin/json/oms-activate-usage.json',
+						renderer: 'svg',
+						rendererSettings: {
+							preserveAspectRatio: 'xMidYMin slice',
+						}
+					});
+
+					$.cocoaDialog.obj.on('hidden.bs.modal', () => {
+						animation.destroy();
+					});
+
+				};
+
+				$.cocoaDialog.open({ type: 'oms_transition_pending', custom_popup: $html, pc_width: 540 }, callback);
+			}
+		});
+	}
+
+	var openOMSTransitionReadyModal = function() {
+		const COOKIE_NAME = 'close_oms_transition_ready_modal';
+
+		$.ajax({
+			type: 'GET',
+			url: '/admin/ajax/dialog/commerce_bo/20250508_oms_transition_ready_modal.cm',
+			dataType: 'html',
+			async: false,
+			cache: false,
+			success: function(res) {
+				const $html = $(res);
+
+				const callback = () => {				
+					const $closeButton = $('._btn-close');
+					$closeButton.on('click', function() {
+						setCookieTodayExpires(COOKIE_NAME, 'Y');
+						$.cocoaDialog.close();
+					});
+
+					const $close2Button = $('._btn-close2');
+					$close2Button.on('click', function() {
+						$.cocoaDialog.close();
+					});
+					
+					const $animationContainer = document.querySelector('._animation-container');
+					const animation = bodymovin.loadAnimation({
+						container: $animationContainer,
+						path: '/admin/json/oms-activate-usage.json',
+						renderer: 'svg',
+						rendererSettings: {
+							preserveAspectRatio: 'xMidYMin slice',
+						}
+					});
+
+					$.cocoaDialog.obj.on('hidden.bs.modal', () => {
+						animation.destroy();
+					});
+
+				};
+
+				$.cocoaDialog.open({ type: 'oms_transition_ready', custom_popup: $html, pc_width: 540 }, callback);
+			}
+		});
+	}
+
+	const openIntegrationNudge = function() {
+		const type = 'integration_nudge';
+		const cookieName = 'close_integration_nudge';
+
+		$.ajax({
+			type: 'GET',
+			url: '/admin/ajax/dialog/integration_nudge.cm',
+			dataType: 'html',
+			async: false,
+			cache: false,
+			success: function(res) {
+				const $html = $(res);
+
+				const callback = () => {
+					mixpanel.track('view_bo_dashboard_visual_modal_banner',{'site_code':SITE_CODE});
+					const $closeButton = $('._btn-close');
+
+					$closeButton.on('click', function() {
+						setCookieTodayExpires(cookieName, 'Y');
+
+						$.cocoaDialog.hide();
+					});
+
+					changeBackdropColor();
+					attachCloseEventOnModalDialog(type, '.modal-content');
+				};
+
+				$.cocoaDialog.open({ type, custom_popup: $html }, callback);
+			}
+		});
+	}
+
+	const openPopupInterlocking = function() {
+		const type = 'popup_interlocking';
+		const cookieName = 'close_popup_interlocking';
+
+		$.ajax({
+			type: 'GET',
+			url: '/admin/ajax/dialog/popup_interlocking.cm',
+			dataType: 'html',
+			async: false,
+			cache: false,
+			success: function(res) {
+				const $html = $(res);
+
+				const callback = () => {
+					const $checkButton = $('._btn-check');
+					const $closeButton = $('._btn-close');
+
+					$checkButton.on('click', function() {
+						window.open('https://smartstore-link.imweb.me/', '_blank');
+						$.cocoaDialog.close();
+					});
+
+					$closeButton.on('click', function() {
+						setCookieTodayExpires(cookieName, 'Y');
+						$.cocoaDialog.close();
+					});
+
+					changeBackdropColor();
+					attachCloseEventOnModalDialog(type, '.modal-content');
+				};
+
+				$.cocoaDialog.open({ type, custom_popup: $html }, callback);
+
+				// $.cocoaDialog.obj.on('hidden.bs.modal', () => {
+				// 	if ( getCookie('NO_EXPIRE_POPUP') !== "Y" && EXPIRE_TYPE !== '') {
+				// 		SADMIN_POPUP.openPopupExpire(EXPIRE_TYPE, EXPIRE_PERIOD);
+				// 	}
+				// });
+			}
+		});
+	}
+
+	const openFontExpirationNudge = function() {
+		const type = 'font_expiration_nudge';
+		const cookieName = 'close_font_expiration_nudge';
+
+		$.ajax({
+			type: 'GET',
+			url: '/admin/ajax/dialog/font_expiration_nudge.cm',
+			dataType: 'html',
+			async: false,
+			cache: false,
+			success: function(res) {
+				const $html = $(res);
+
+				const callback = () => {
+					const $checkButton = $('._btn-check');
+					const $closeButton = $('._btn-close');
+
+					$checkButton.on('click', function() {
+						$.cocoaDialog.close();
+					});
+
+					$closeButton.on('click', function() {
+						setCookieTodayExpires(cookieName, 'Y');
+
+						$.cocoaDialog.close();
+					});
+
+					changeBackdropColor();
+					attachCloseEventOnModalDialog(type, '.modal-content');
+				};
+
+				$.cocoaDialog.open({ type, custom_popup: $html }, callback);
+
+				$.cocoaDialog.obj.on('hidden.bs.modal', () => {
+					if ( getCookie('NO_EXPIRE_POPUP') !== "Y" && EXPIRE_TYPE !== '') {
+						SADMIN_POPUP.openPopupExpire(EXPIRE_TYPE, EXPIRE_PERIOD);
+					}
+				});
+			}
+		});
+	}
+
+	const openFontAdditionNudge = function() {
+		console.log('openFontAdditionNudge');
+		const type = 'font_addition_nudge';
+		const cookieName = 'close_font_addition_nudge';
+
+		$.ajax({
+			type: 'GET',
+			url: '/admin/ajax/dialog/font_addition_nudge.cm',
+			dataType: 'html',
+			async: false,
+			cache: false,
+			success: function(res) {
+				const $html = $(res);
+
+				const callback = () => {
+					const $checkButton = $('._btn-check');
+					const $closeButton = $('._btn-close');
+
+					$checkButton.on('click', function() {
+						$.cocoaDialog.close();
+					});
+
+					$closeButton.on('click', function() {
+						setCookieTodayExpires(cookieName, 'Y');
+
+						$.cocoaDialog.close();
+					});
+
+					changeBackdropColor();
+					attachCloseEventOnModalDialog(type, '.modal-content');
+				};
+
+				$.cocoaDialog.open({ type, custom_popup: $html }, callback);
+
+				$.cocoaDialog.obj.on('hidden.bs.modal', () => {
+					if ( getCookie('NO_EXPIRE_POPUP') !== "Y" && EXPIRE_TYPE !== '') {
+						SADMIN_POPUP.openPopupExpire(EXPIRE_TYPE, EXPIRE_PERIOD);
+					}
+				});
+			}
+		});
+	}
+
+	const openPopupNotificationLaunching = function() {
+		const COOKIE_NAME = 'close_popup_notification_launching';
+
+		$.ajax({
+			type: 'POST',
+			dataType: 'html',
+			url: '/admin/ajax/dialog/popup_notification_launching.cm',
+			async: false,
+			cache: false,
+			success: function(res) {
+				const $html = $(res);
+
+				$($html).find('._button-close').click(function() {
+					setCookieTodayExpires(COOKIE_NAME, 'Y');
+
+					$.cocoaDialog.close();
+				});
+
+				$($html).find('._button-notification').click(function() {
+					window.setTimeout(() => {
+						mixpanel.track('click_bo_notification', {
+							'site_code': SITE_CODE,
+							'source': 'modal',
+						});
+
+						getNotifyHandler().openModal();
+					}, 0);
+
+					$.cocoaDialog.close();
+				});
+
+				$.cocoaDialog.open({
+					type: 'notification_launching',
+					custom_popup: $html,
+				}, function() {
+					changeBackdropColor();
+				});
+			}
+		});
+	}
+
+	const openPopupCollectCategory = function() {
+		const type = 'collect-category';
+
+		$.ajax({
+			cache: false,
+			type: 'POST',
+			dataType: 'html',
+			url: '/admin/ajax/dialog/popup_collect_category.cm',
+		}).then((html) => {
+			const $html = $(html);
+
+			$.cocoaDialog.open({
+				type,
+				custom_popup: $html,
+			}, function() {
+				changeBackdropColor();
+				attachCloseEventOnModalDialog(type, `._${type}`);
+			});
+		});
+	}
+
+	const openPopupSiteVersionUpgrade = function() {
+		const type = 'site-version-upgrade';
+
+		$.ajax({
+			cache: false,
+			type: 'POST',
+			dataType: 'html',
+			url: '/admin/ajax/dialog/popup_site_version_upgrade.cm',
+		}).then((html) => {
+			const $html = $(html);
+
+			const callback = () => {
+				$html.find('._btn-close').on('click', function() {
+					$.cocoaDialog.close();
+				});
+
+				changeBackdropColor();
+				attachCloseEventOnModalDialog(type, '.modal-content');
+			}
+
+			$.cocoaDialog.open({ type, custom_popup: $html }, callback);
+		});
+	}
+
+	return {
+		openPopupGiftNudge,
+		openIntegrationNudge,
+		openFontExpirationNudge,
+		openFontAdditionNudge,
+		openPopupNotificationLaunching,
+		openPopupCollectCategory,
+		openOMSTransitionPendingModal,
+		openOMSTransitionReadyModal,
+		openPopupSiteVersionUpgrade,
+		openPopupInterlocking,
+	}
+})();
+
+var SADMIN_MENU_ALERT = function(){
+	var openAlert = function(){
+		this.ajaxUrl = '/admin/ajax/dialog/menu_alert.cm';
+		var str_url = location.pathname;
+
+		if ( IMWEB_SESSIONSTORAGE.get("MENU_ALERT_EMPTY_" + str_url) == 'Y' ) return;
+
+		$.ajax({
+			url : this.ajaxUrl,
+			type : 'POST',
+			dataType : 'HTML',
+			data : {'mode' : 'open', 'str_url': str_url},
+			success : function(res){
+				if ( res.length == 0 ) {
+					IMWEB_SESSIONSTORAGE.set("MENU_ALERT_EMPTY_" + str_url, 'Y', 60);
+				} else {
+					if($("#menu_alert").length == 0 ){
+						$('#content #alertBox').append(res);
+						$("#menu_alert").show();
+					}
+				}
+			}
+		});
+	};
+
+	var closeAlert = function(idx){
+		$.ajax({
+			url : this.ajaxUrl,
+			type : 'POST',
+			dataType : 'HTML',
+			data : {mode : 'close', 'idx' : idx},
+			success : function(){
+				$("#menu_alert").hide();
+			}
+		});
+	};
+	var closeBannerAlert = function(type){
+		$.ajax({
+			url : '/admin/ajax/dialog/banner_alert.cm',
+			type : 'POST',
+			dataType : 'HTML',
+			data : {'type' : type},
+			success : function(){
+				$("#banner_alert_"+type).css({'display':'none'});
+			}
+		});
+	};
+	return {
+		ajaxUrl : null,
+		'openAlert' : function(){
+			openAlert();
+		},
+		'closeAlert' : function(idx){
+			closeAlert(idx);
+		},
+		'closeBannerAlert' : function(type){
+			closeBannerAlert(type);
+		}
+	};
+}();
+
+const dateFormatUtils = (function() {
+	const pad = (v) => {
+		return `0${v}`.slice(-2);
+	}
+
+	const toHyphenString = (dateObj) => {
+		const year = dateObj.getFullYear();
+		const month = pad(dateObj.getMonth() + 1);
+		const date = pad(dateObj.getDate());
+
+		return [year, month, date].join('-');
+	}
+
+	const toButtonString = (dateString) => {
+		const [year, month, date] = dateString.split('-').map(v => parseInt(v, 10));
+
+		const dateObj = new Date(year, month - 1, date);
+
+		const day = dateObj.toLocaleString(window.ADMIN_LANG_CODE || 'en', { weekday: 'short' });
+
+		const yearText = year.toString().substring(2);
+		const monthText = pad(month);
+		const dateText = pad(date);
+
+		return `${yearText}.${monthText}.${dateText} (${day})`;
+	}
+
+	return { pad, toHyphenString, toButtonString };
+})();
+
+const datepickerButtonHandler = (function($) {
+	const defaultRefreshUrl = (start, end) => {
+		const parser = querystringParser();
+		const query = parser(window.location.search);
+
+		window.location.href = getQuerystring({
+			...query,
+			start,
+			end,
+		});
+	}
+
+	function DatepickerButtonHandler(options) {
+		this.$container = options.$container;
+		this.$start = options.$start;
+		this.$end = options.$end;
+		this.$middleIcon = options.$middleIcon;
+		this.startDate = options.startDate;
+		this.endDate = options.endDate;
+	}
+
+	DatepickerButtonHandler.prototype.init = function() {
+		const { $container, $start, $end, startDate, endDate } = this;
+
+		const update = ($e, date) => {
+			if (!isValidDate(date)) {
+				return false;
+			}
+
+			const hyphenText = dateFormatUtils.toHyphenString(date);
+			const buttonText = dateFormatUtils.toButtonString(hyphenText);
+
+			$e.data('text.hyphen', hyphenText);
+			$e.text(buttonText);
+
+			return { buttonText, hyphenText };
+		}
+
+		const { hyphenText: startText } = update($start, startDate);
+		const { hyphenText: endText } = update($end, endDate);
+
+		if (startText === endText)  {
+			$container.addClass('same');
+		} else {
+			$container.removeClass('same');
+		}
+	}
+
+	DatepickerButtonHandler.prototype.update = function(startDate, endDate) {
+		this.startDate = new Date(startDate);
+		this.endDate = new Date(endDate);
+
+		this.init();
+	}
+
+	DatepickerButtonHandler.prototype.onClick = function(callback) {
+		const self = this;
+		const { $container } = self
+
+		if ($container.data('has.click')) {
+			return false;
+		}
+
+		$container.data('has.click', true);
+
+		const handler = function() {
+			if (callback) {
+				const { startDate, endDate } = self;
+
+				callback(self, startDate, endDate);
+			}
+		}
+
+		$container.on('click', handler);
+
+		return handler;
+	}
+
+	DatepickerButtonHandler.prototype.refreshUrl = function() {
+		const { $start, $end } = this;
+
+		const startHyphenText = $start.data('text.hyphen');
+		const endHyphenText = $end.data('text.hyphen');
+
+		DatepickerButtonHandler.dependencies.refreshUrl(startHyphenText, endHyphenText);
+	}
+
+	DatepickerButtonHandler.prototype.hyphenText = function() {
+		const { $start, $end } = this;
+
+		return {
+			start: $start.data('text.hyphen'),
+			end: $end.data('text.hyphen'),
+		};
+	}
+
+	DatepickerButtonHandler.dependencies = {
+		refreshUrl: defaultRefreshUrl,
+	};
+
+	/**
+	 * @param {Object} options - 옵션
+	 * @param {string} [options.container='._datepicker'] - container 셀렉터
+	 * @param {Object} [options.selectors={}] - start, end 텍스트 selectors
+	 * @param {string} [options.selectors.start='._datepicker-start'] - start 텍스트 셀렉터
+	 * @param {string} [options.selectors.middleIcon='._datepicker-middle-icon'] - middle icon 셀렉터
+	 * @param {string} [options.selectors.end='._datepicker-end'] - end 텍스트 셀렉터
+	 * @param {Date} [options.startDate] - start date
+	 * @param {Date} [options.endDate] - end date
+	 */
+	return (options = {}) => {
+		const container = options.container || '._datepicker';
+		const selectors = options.selectors || {};
+		const startDate = options.startDate;
+		const endDate = options.endDate;
+
+		const startDateSelector = selectors.start || '._datepicker-start';
+		const middleIconSelector = selectors.middleIcon || '._datepicker-middle-icon';
+		const endDateSelector = selectors.end || '._datepicker-end';
+
+		const _options = {
+			$container: $(container),
+			$start: $(startDateSelector),
+			$middleIcon: $(middleIconSelector),
+			$end: $(endDateSelector),
+			startDate: new Date(startDate),
+			endDate: new Date(endDate),
+		};
+
+		return new DatepickerButtonHandler(_options);
+	};
+})(window.jQuery);
+
+const getNotifyHandler = (function() {
+	const utils = (function () {
+		const throttle = (callback, delay = 0) => {
+			let timer = null;
+
+			return function(...args) {
+				if (timer !== null) {
+					return false;
+				}
+
+				timer = window.setTimeout(() => {
+					callback.call(this, ...args);
+
+					timer = null;
+				}, delay)
+			}
+		}
+
+		const listenEvents = (events, command) => {
+			Object.entries(events).forEach((event) => {
+				const [eventName, listener] = event;
+
+				window[`${command}EventListener`](eventName, listener);
+			});
+		}
+
+		const dismissMobileMenubar = () => {
+			Object.getPrototypeOf(window.doznutadmin.AppNavigation)._handleMenubarLeave();
+		}
+
+		const blurCurrentActiveElement = () => {
+			if (document.activeElement instanceof HTMLElement) {
+				document.activeElement.blur();
+			}
+		}
+
+		const getWindowWidth = () => {
+			return window.innerWidth;
+		}
+
+		const isMobileBreakpoint = (breakpointKey) => {
+			return breakpointKey !== 'lg';
+		}
+
+		const getBreakpointKey = (windowWidth, breakpoints) => {
+			const breakpoint = Object.values(breakpoints).find((breakpoint) => {
+				return windowWidth <= breakpoint.threshold;
+			}) ?? breakpoints.lg;
+
+			return breakpoint.key;
+		}
+
+		const getCurrentBreakpointKey = (breakpoints) => {
+			const windowWidth = getWindowWidth();
+
+			return getBreakpointKey(windowWidth, breakpoints);
+		}
+
+		const getIframeURL = (url, breakpoints) => {
+			const params = {
+				from: location.href,
+				layout: 'panel',
+				breakpoint: getCurrentBreakpointKey(breakpoints),
+			};
+
+			const query = new URLSearchParams(params);
+
+			return `${url}?${query.toString()}`;
+		}
+
+		const isSidebarMini = () => {
+			return $('body').hasClass('sidebar-mini');
+		}
+
+		return {
+			throttle,
+			listenEvents,
+			dismissMobileMenubar,
+			blurCurrentActiveElement,
+			getWindowWidth,
+			isMobileBreakpoint,
+			getBreakpointKey,
+			getCurrentBreakpointKey,
+			getIframeURL,
+			isSidebarMini,
+		};
+	})();
+
+	const scrollLock = (function() {
+		const state = {
+			isLock: false,
+			restore: {
+				scrollY: 0,
+				bodyStyles: null,
+			},
+		};
+
+		const isScrollable = () => {
+			return Boolean(window.innerWidth - document.documentElement.clientWidth);
+		}
+
+		const getCurrentScrollY = () => {
+			return window.scrollY;
+		}
+
+		const getCurrentBodyStyles = () => {
+			const bodyStyles = document.body.style;
+
+			return {
+				position: bodyStyles.position,
+				top: bodyStyles.top,
+				overflowY: bodyStyles.overflowY,
+				width: bodyStyles.width,
+			};
+		}
+
+		const lock = () => {
+			const scrollable = isScrollable();
+			const currentScrollY = getCurrentScrollY();
+			const currentBodyStyles = getCurrentBodyStyles();
+
+			state.isLock = true;
+			state.restore.scrollY = currentScrollY;
+			state.restore.bodyStyles = currentBodyStyles;
+
+			document.body.style.setProperty('position', 'fixed');
+			document.body.style.setProperty('top', `-${currentScrollY}px`);
+			document.body.style.setProperty('width', '100%');
+
+			if (scrollable) {
+				document.body.style.setProperty('overflow-y', 'scroll');
+			}
+		}
+
+		const unlock = () => {
+			const { scrollY, bodyStyles } = state.restore;
+
+			document.body.style.setProperty('position', bodyStyles.position);
+			document.body.style.setProperty('top', bodyStyles.top);
+			document.body.style.setProperty('width', bodyStyles.width);
+			document.body.style.setProperty('overflow-y', bodyStyles.overflowY);
+
+			window.scrollTo(0, scrollY);
+
+			state.isLock = false;
+			state.restore.scrollY = 0;
+			state.restore.bodyStyles = null;
+		}
+
+		const wrap = (isLockCondition, fn) => () => {
+			if (state.isLock === isLockCondition) {
+				fn();
+			}
+		}
+
+		return {
+			lock: wrap(false, lock),
+			unlock: wrap(true, unlock)
+		};
+	})();
+
+	const createChannel = ($iframe, messageHandler) => {
+		const channel = new MessageChannel();
+
+		$iframe.addEventListener('load', function() {
+			this.contentWindow.postMessage('init:port', location.origin, [channel.port2]);
+		});
+
+		channel.port1.onmessage = messageHandler;
+
+		const postMessage = (message) => {
+			channel.port1.postMessage(message);
+		}
+
+		const close = () => {
+			channel.port1.close();
+			channel.port2.close();
+		}
+
+		return { postMessage, close };
+	}
+
+	function NotifyHandler(options) {
+		const { $provider, $button } = options;
+
+		this.$provider = $provider;
+		this.$button = $button;
+		this.isOpen = false;
+		this.breakpointKey = '';
+		this.channel = null;
+		this.windowEvent = {
+			isAttached: false,
+			events: {
+				resize: utils.throttle(this.handleWindowResize, 500).bind(this),
+				click: this.handleWindowClick.bind(this),
+				keydown: this.handleWindowKeydown.bind(this),
+			},
+		};
+
+		this.handleMessage = this.handleMessage.bind(this);
+	}
+
+	NotifyHandler.prototype.handleWindowResize = function() {
+		const breakpoints = NotifyHandler.CONST.breakpoints;
+
+		const nextBreakpointKey = utils.getCurrentBreakpointKey(breakpoints);
+
+		if (utils.isMobileBreakpoint(nextBreakpointKey)) {
+			scrollLock.lock();
+		} else {
+			scrollLock.unlock();
+		}
+
+		this.breakpointKey = nextBreakpointKey;
+
+		this.postMessage(`resize:${nextBreakpointKey}`);
+	}
+
+	NotifyHandler.prototype.handleWindowClick = function(e) {
+		const { $provider } = this;
+
+		const isProviderContext = $provider.contains(e.target);
+
+		if (isProviderContext) {
+			return false;
+		}
+
+		this.closeModal();
+	}
+
+	NotifyHandler.prototype.handleWindowKeydown = function(e) {
+		const { breakpointKey } = this;
+
+		if (e.key === 'Escape' && utils.isMobileBreakpoint(breakpointKey)) {
+			this.closeModal();
+		}
+	}
+
+	NotifyHandler.prototype.attachWindowEvents = function() {
+		const { windowEvent } = this;
+
+		windowEvent.isAttached = true;
+
+		utils.listenEvents(windowEvent.events, 'add');
+	}
+
+	NotifyHandler.prototype.detachWindowEvents = function() {
+		const { windowEvent } = this;
+
+		windowEvent.isAttached = false;
+
+		utils.listenEvents(windowEvent.events, 'remove');
+	}
+
+	NotifyHandler.prototype.postMessage = function(message) {
+		this.channel.postMessage(message);
+	}
+
+	NotifyHandler.prototype.handleMessage = function(e) {
+		const { data } = e;
+
+		// 알림 모달 열였을 시
+		if (data === 'open') {
+			// Nothing
+		}
+
+		// 알림 모달 닫았을 시
+		if (data === 'close') {
+			this.closeModal();
+		}
+
+		// 단일 읽기 처리 시
+		if (data === 'confirm') {
+			// Nothing
+		}
+
+		// 전체 읽기 처리 시
+		if (data === 'confirm:all') {
+			this.interval.clearBadge();
+		}
+
+		// 설정 화면 진입 버튼 클릭 시
+		if (data === 'open:setting') {
+			mixpanel.track('click_bo_notification_settings', { 'site_code': SITE_CODE });
+		}
+
+		// 알림 항목 클릭 시
+		if (data.startsWith('itemclick')) {
+			const type = data.split(':')[1];
+
+			mixpanel.track('click_bo_notification_list_item', { type, 'site_code': SITE_CODE });
+		}
+
+		// 배너 클릭 시
+		if (data.startsWith('bannerclick')) {
+			const name = data.split(':')[1];
+
+			mixpanel.track('click_bo_notification_banner', { name, 'site_code': SITE_CODE });
+		}
+	}
+
+	NotifyHandler.prototype.openModal = function() {
+		const { $provider, $button } = this;
+
+		const createElement = () => {
+			const $modal = document.createElement('div');
+			const $backdrop = document.createElement('div');
+			const $panel = document.createElement('div');
+			const $contents = document.createElement('div');
+			const $iframe = document.createElement('iframe');
+
+			$modal.classList.add('notify-modal');
+			$backdrop.classList.add('notify-modal__backdrop');
+			$panel.classList.add('notify-modal__panel');
+			$contents.classList.add('notify-modal__contents');
+			$iframe.classList.add('notify-modal__iframe');
+
+			if (utils.isSidebarMini()) {
+				$modal.classList.add('notify-modal--narrow');
+			}
+
+			$iframe.referrerPolicy = 'strict-origin';
+			$iframe.src = utils.getIframeURL(NotifyHandler.CONST.iframeSource, NotifyHandler.CONST.breakpoints);
+
+			$contents.appendChild($iframe);
+
+			$panel.appendChild($contents);
+
+			$modal.appendChild($backdrop);
+			$modal.appendChild($panel);
+
+			return $modal;
+		}
+
+		const attachEvent = ($modal) => {
+			const $panel = $modal.querySelector('.notify-modal__panel');
+
+			$panel.addEventListener('click', () => {
+				this.closeModal();
+			});
+		}
+
+		const breakpointKey = utils.getCurrentBreakpointKey(NotifyHandler.CONST.breakpoints);
+
+		const $modal = createElement();
+
+		const channel = createChannel(
+				$modal.querySelector('.notify-modal__iframe'),
+				this.handleMessage,
+		);
+
+		attachEvent($modal);
+
+		$button.classList.add('focus');
+
+		$provider.appendChild($modal);
+
+		this.attachWindowEvents();
+
+		if (utils.isMobileBreakpoint(breakpointKey)) {
+			utils.dismissMobileMenubar();
+			scrollLock.lock();
+		}
+
+		utils.blurCurrentActiveElement();
+
+		this.breakpointKey = breakpointKey;
+		this.isOpen = true;
+		this.channel = channel;
+
+		this.postMessage('open');
+
+		this.interval.stop();
+	}
+
+	NotifyHandler.prototype.closeModal = function() {
+		const { $provider, $button, channel } = this;
+
+		this.postMessage('close');
+
+		channel.close();
+
+		this.detachWindowEvents();
+
+		scrollLock.unlock();
+
+		$button.classList.remove('focus');
+
+		// channel.postMessage('close') 하기 위함
+		window.setTimeout(() => {
+			$provider.innerHTML = '';
+		}, 0);
+
+		this.breakpointKey = '';
+		this.isOpen = false;
+		this.channel = null;
+
+		this.interval.start();
+	}
+
+	NotifyHandler.prototype.toggleModal = function() {
+		const { isOpen } = this;
+
+		if (isOpen) {
+			this.closeModal();
+		} else {
+			this.openModal();
+		}
+	}
+
+	NotifyHandler.prototype.setInterval = function(interval) {
+		this.interval = interval;
+	}
+
+	NotifyHandler.CONST = {
+		iframeSource: `${location.origin}/admin/notify`,
+		providerSelector: '._notify-modal-provider',
+		buttonSelector: '._gnb_notification_button',
+		breakpoints: {
+			sm: { key: 'sm', threshold: 587 },
+			md: { key: 'md', threshold: 992 },
+			lg: { key: 'lg', threshold: Number.MAX_VALUE },
+		},
+	};
+
+	let instance = null;
+
+	return () => {
+		if (instance === null) {
+			const options = {
+				$provider: document.querySelector(NotifyHandler.CONST.providerSelector),
+				$button: document.querySelector(NotifyHandler.CONST.buttonSelector),
+			};
+
+			instance = new NotifyHandler(options);
+		}
+
+		return instance;
+	}
+})();
+
+const getNotifyBadgeInterval = (function() {
+	const SELECTOR = '_badge';
+
+	function fetchBadgeCount() {
+		return $.ajax({
+			cache: false,
+			type: 'GET',
+			dataType: 'json',
+			url: '/ajax/notification/notification.cm?apiPath=list&req=count',
+		}).promise().then(res => res.unReadTotalCount ?? 0);
+	}
+
+	function createBadgeElement(type, text) {
+		const $badge = document.createElement('span');
+
+		$badge.classList.add(SELECTOR);
+
+		$badge.textContent = text;
+
+		switch(type) {
+			case 'count':
+				$badge.classList.add('badge_icon', 'badge_count');
+				break;
+			case 'new':
+				$badge.textContent = '';
+				break;
+		}
+
+		return $badge;
+	}
+
+	function setBadge(count, $button) {
+		const $prevBadge = $button.find(`.${SELECTOR}`);
+
+		if ($prevBadge.length) {
+			$prevBadge.remove();
+		}
+
+		const countText = count > 99 ? '99+' : count;
+
+		const $badge = count > 0 ? createBadgeElement('count', countText) : createBadgeElement('new', 'New');
+
+		$button.append($badge);
+	}
+
+	function createUpdateBadgeCount($button) {
+		return () => {
+			return fetchBadgeCount().then((count) => setBadge(count, $button));
+		}
+	}
+
+	function Interval(fn, interval, $button) {
+		let timer = null;
+
+		const start = () => {
+			timer = window.setInterval(fn, interval);
+		}
+
+		const stop = () => {
+			window.clearInterval(timer);
+		}
+
+		const force = () => {
+			fn();
+		}
+
+		const clearBadge = () => {
+			setBadge(0, $button);
+		}
+
+		return { start, stop, force, clearBadge };
+	}
+
+	return ($button) => {
+		const updateBadgeCount = createUpdateBadgeCount($button);
+
+		return new Interval(updateBadgeCount, 1000 * 60 * 1, $button);
+	}
+})();

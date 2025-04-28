@@ -1,0 +1,225 @@
+@font-face {
+	font-family : 'icomoon';
+	src         : url('../fonts/db-icons.eot?bdinwi');
+	src         : url('../fonts/db-icons.eot?bdinwi#iefix') format('embedded-opentype'),
+	url('../fonts/db-icons.ttf?bdinwi') format('truetype'),
+	url('../fonts/db-icons.woff?bdinwi') format('woff'),
+	url('../fonts/db-icons.svg?bdinwi#icomoon') format('svg');
+	font-weight : normal;
+	font-style  : normal;
+}
+
+[class^="db-"], [class*=" db-"] {
+	/* use !important to prevent issues with browser extensions that change fonts */
+	font-family             : 'icomoon' !important;
+	speak                   : none;
+	font-style              : normal;
+	font-weight             : normal;
+	font-variant            : normal;
+	text-transform          : none;
+	line-height             : 1;
+
+	/* Better Font Rendering =========== */
+	-webkit-font-smoothing  : antialiased;
+	-moz-osx-font-smoothing : grayscale;
+}
+
+
+.db-crm-campaigns:before {
+    content: "";
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: url('../images/admin/icon-bo-crm-campaigns.svg') no-repeat center center;
+}
+.gui-controls > li > a.active .db-crm-campaigns:before {
+    background-image: url('../images/admin/icon-bo-crm-campaigns.svg');
+}
+.db-crm-sales-tool:before {
+	content: "";
+	display: block;
+	width: 100%;
+	height: 100%;
+	background: url('../images/admin/icon-bo-crm-sales-tool.svg') no-repeat center center;
+}
+
+.gui-controls > li > a.active .db-crm-sales-tool:before {
+    background-image: url('../images/admin/icon-bo-crm-sales-tool.svg');
+}
+
+.db-crm:before {
+    content: "";
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: url('../images/admin/icon-bo-target.svg') no-repeat center center;
+}
+.gui-controls > li > a.active .db-crm:before {
+    background-image: url('../images/admin/icon-bo-target.svg');
+}
+.db-layers:before {
+	content: "\e90f";
+}
+.db-link:before {
+	content: "\e910";
+}
+.db-calendar:before {
+    content: "";
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: url('../images/admin/icon-bo-calendar.svg') no-repeat center center;
+}
+.db-comments:before {
+    content: "";
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: url('../images/admin/icon-bo-headphones.svg') no-repeat center center;
+}
+.db-dashboard:before {
+    content: "";
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: url('../images/admin/icon-bo-grid.svg') no-repeat center center;
+}
+.gui-controls > li > a.active .db-dashboard:before {
+    background-image: url('../images/admin/icon-bo-grid.svg');
+}
+.db-glasses:before {
+    content: "";
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: url('../images/admin/icon-bo-search.svg') no-repeat center center;
+}
+.db-telescope:before {
+	content: "";
+	display: block;
+	width: 100%;
+	height: 100%;
+	background: url('../images/admin/icon-bo-telescope.svg') no-repeat center center;
+}
+.db-globe:before {
+    content: "";
+    display: block;
+    width: 100%;
+    background: url('../images/admin/icon-bo-globe.svg') no-repeat center center;
+    height: 50px;
+}
+.db-graduation-cap:before {
+    content: "";
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: url('../images/admin/icon-bo-graduation-hat.svg') no-repeat center center;
+}
+.db-graduation-cap-2:before {
+  content: "";
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: url('../images/admin/icon-bo-graduation-hat-2.svg') no-repeat center center;
+}
+.db-megaphone:before {
+    content: "";
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: url('../images/admin/icon-bo-announcement.svg') no-repeat center center;
+}
+.db-mobile:before {
+    content: "";
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: url('../images/admin/icon-bo-phone.svg') no-repeat center center;
+}
+.db-pencil:before {
+    content: "";
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: url('../images/admin/icon-bo-edit.svg') no-repeat center center;
+}
+.db-preview:before {
+	content: "";
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: url('../images/admin/icon-bo-preview.svg') no-repeat center center;
+}
+.db-rocket:before {
+    content: "";
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: url('../images/admin/icon-bo-zap.svg') no-repeat center center;
+}
+.gui-controls > li > a.active .db-rocket:before {
+    background-image: url('../images/admin/icon-bo-zap.svg');
+}
+.db-settings:before {
+    content: "";
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: url('../images/admin/icon-bo-settings.svg') no-repeat center center;
+}
+.db-shop-in-shop:before {
+    content: "";
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: url('../images/admin/icon-bo-shop-in-shop.svg') no-repeat center center;
+}
+.db-shopping-bag:before {
+    content: "";
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: url('../images/admin/icon-bo-shopping-bag.svg') no-repeat center center;
+}
+.db-status-up:before {
+    content: "";
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: url('../images/admin/icon-bo-line-chart-up.svg') no-repeat center center;
+}
+.db-user:before {
+    content: "";
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: url('../images/admin/icon-bo-users.svg') no-repeat center center;
+}
+.db-wand:before {
+    content: "";
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: url('../images/admin/icon-bo-designmode.svg') no-repeat center center;
+}
+.db-bell:before {
+	content: "";
+	display: block;
+	width: 100%;
+	height: 100%;
+	background: url('../images/admin/icon-bo-bell.svg') no-repeat center center;
+}
+.db-book-open:before {
+  content: "";
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: url('../images/admin/icon-bo-book-open.svg') no-repeat center center;
+}
+
+@media (max-width: 991px) {
+	[class^="db-"]::before,
+	[class*=" db-"]::before {
+		background-size: 20px 20px;
+	}
+}

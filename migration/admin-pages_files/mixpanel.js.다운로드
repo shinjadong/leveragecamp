@@ -1,0 +1,1385 @@
+(function(f,b){if(!b.__SV){var e,g,i,h;window.mixpanel=b;b._i=[];b.init=function(e,f,c){function g(a,d){var b=d.split(".");2==b.length&&(a=a[b[0]],d=b[1]);a[d]=function(){a.push([d].concat(Array.prototype.slice.call(arguments,0)))}}var a=b;"undefined"!==typeof c?a=b[c]=[]:c="mixpanel";a.people=a.people||[];a.toString=function(a){var d="mixpanel";"mixpanel"!==c&&(d+="."+c);a||(d+=" (stub)");return d};a.people.toString=function(){return a.toString(1)+".people (stub)"};i="disable time_event track track_pageview track_links track_forms track_with_groups add_group set_group remove_group register register_once alias unregister identify name_tag set_config reset opt_in_tracking opt_out_tracking has_opted_in_tracking has_opted_out_tracking clear_opt_in_out_tracking start_batch_senders people.set people.set_once people.unset people.increment people.append people.union people.track_charge people.clear_charges people.delete_user people.remove".split(" ");
+    for(h=0;h<i.length;h++)g(a,i[h]);var j="set set_once union unset remove delete".split(" ");a.get_group=function(){function b(c){d[c]=function(){call2_args=arguments;call2=[c].concat(Array.prototype.slice.call(call2_args,0));a.push([e,call2])}}for(var d={},e=["get_group"].concat(Array.prototype.slice.call(arguments,0)),c=0;c<j.length;c++)b(j[c]);return d};b._i.push([e,f,c])};b.__SV=1.2;e=f.createElement("script");e.type="text/javascript";e.async=!0;e.src="undefined"!==typeof MIXPANEL_CUSTOM_LIB_URL?
+    MIXPANEL_CUSTOM_LIB_URL:"file:"===f.location.protocol&&"//cdn.mxpnl.com/libs/mixpanel-2-latest.min.js".match(/^\/\//)?"https://cdn.mxpnl.com/libs/mixpanel-2-latest.min.js":"//cdn.mxpnl.com/libs/mixpanel-2-latest.min.js";g=f.getElementsByTagName("script")[0];g.parentNode.insertBefore(e,g)}})(document,window.mixpanel||[]);
+
+const MIXPANEL = {
+    init: function () {
+        window.onload = function(){
+            const path = location.pathname.replace(/\/$/, '');
+            const params = new URLSearchParams(location.search);
+	        const maxRetries = 5; // 최대 재시도 횟수
+	        let attempt = 0; // 현재 재시도 횟수 카운터
+	        const delay = 1000; // 재시도 사이의 지연 시간 (예: 1000ms = 1초)
+	        // 채널톡의 shadowDOM에 일반적인 접근이 되지않습니다.
+	        // 즉 믹스패널.js가 채널톡 이벤트를 잡으려면 shadowDOM에 접근하여 이벤트를 잡아야하는데, 채널톡의 shadowDOM은 자체적으로 로드하다보니(믹스패널.js와 로드순서가 미스매치됩니다.) 계속 shadowDOM안에 요소들의 이벤트를 잡지 못하는 경우가 생겼습니다. 따라서 믹스패널.js에서 잡아줄수있도록 추가된 함수입니다.
+	        // 채널톡 플러그인 체크 함수
+	        function channelTalkPluginCheck() {
+		        attempt++; // 시도 횟수 증가
+
+		        let hostElement = document.querySelector('#ch-plugin-entry > div');
+
+		        if (hostElement && hostElement.shadowRoot) {
+			        let shadowRoot = hostElement.shadowRoot;
+			        let targetElement = shadowRoot.querySelector("#ch-shadow-root-wrapper > div > button > div");
+
+			        if (targetElement) {
+				        // 요소를 찾았으므로, 여기에 이벤트 리스너 등록 등의 로직을 추가합니다.
+				        targetElement.addEventListener('click', function(e) {
+					        let channelTalkStatus = document.querySelector("#ch-plugin-script").className;
+					        // 초기에는 해당 클래스만 있어서 이렇게 잡았습니다.
+					        if (channelTalkStatus === 'ch-messenger-hidden') {
+						        mixpanel.track('click_channeltalk_open', {'site_code':SITE_CODE,'where_at': 'bo'});
+					        }
+					        // ch-messenger-hidden 라는 클래스로 채널톡을 끄고 키는 방식이라, 킬 때만 이벤트가 추적되게 처리하였습니다.
+					        if (channelTalkStatus === 'ch-desk-messenger') {
+						        mixpanel.track('click_channeltalk_close', {'site_code':SITE_CODE,'where_at': 'bo'});
+					        }
+					        if (channelTalkStatus === 'ch-desk-messenger ch-messenger-hidden') {
+						        mixpanel.track('click_channeltalk_open', {'site_code':SITE_CODE,'where_at': 'bo'});
+					        }
+				        });
+
+				        // 성공적으로 요소를 찾았으므로, 재시도를 중단합니다.
+				        return; // 함수를 종료하여 더 이상의 코드 실행을 방지합니다.
+			        }
+		        }
+
+		        // 요소를 찾지 못했거나 shadowRoot가 없는 경우
+		        if (attempt <= maxRetries) {
+			        // 최대 재시도 횟수에 도달하지 않았으므로 재시도합니다.
+			        setTimeout(channelTalkPluginCheck, delay); // 일정 시간 후에 함수를 다시 호출합니다.
+		        } else {
+			        // 최대 재시도 횟수에 도달했습니다. 더 이상 재시도하지 않고 넘깁니다.
+		        }
+	        }
+
+	        // 첫 시도를 시작합니다.
+	        channelTalkPluginCheck();
+
+	        $("#main-menu").on("click", "> li", function(e) {
+
+		        let menuName = $(this).find("> a").first().text().replace(/\d+$/, '');
+		        mixpanel.track('click_bo_gnb_menu_depth_0', {
+					  'site_code':SITE_CODE,
+		              'menu_name': menuName
+		            });
+		        // 이벤트 버블링을 방지합니다.
+		        e.stopPropagation();
+	        });
+
+			// 하위 메뉴 클릭
+	        $("#main-menu li ul li").click(function(e) {
+
+		        // 클릭된 하위 메뉴의 상위 메뉴이름을 가져옵니다.
+		        let parentDepth0Text = $(this).closest("ul").closest("li").find("> a").text();
+		        mixpanel.track('click_bo_gnb_menu_depth_1', {
+			        'site_code':SITE_CODE,
+			        'menu_name': $(e.currentTarget).text().replace(/\d+$/, ''),
+			        'depth_0_menu_name': parentDepth0Text.replace(/\d+$/, '')
+		        });
+
+		        // 이벤트 버블링을 방지합니다.
+		        e.stopPropagation();
+	        });
+
+            // CRM 캠페인 자동화 클릭
+            $("#main-menu [data-title='crm_campaigns']").click(function(e) {
+                mixpanel.track('view_bo_crm_campaign', {
+                    'site_code':SITE_CODE,
+                });
+            });
+
+            // 좌측하단 언어 선택
+            $('.menubar-foot-panel').on('click', '.dropdown-menu a', function (e) {
+                mixpanel.track('click_bo_change_language', {
+	                'site_code':SITE_CODE,
+                    'language': $(e.currentTarget).data('language')
+                });
+            });
+
+            // 사이트 관리 클릭
+            $('#main-menu').on('click', '.top-menu a', function (e) {
+                mixpanel.track('click_bo_gnb_sitemanage',{'site_code':SITE_CODE});
+            });
+
+
+            // 모바일 햄버거 클릭
+            $('.top_header').on('click', '.menubar-toggle', function (e) {
+                mixpanel.track('click_bo_hamburger_menu',{'site_code':SITE_CODE});
+            });
+
+            $('.headerbar-right').on('click', '.__upgrade-btn', function (e) {
+                // 연장/업그레이드 버튼 클릭
+                mixpanel.track('click_bo_dashboard_upgrade',{'site_code':SITE_CODE});
+            }).on('click', '.__exit-btn', function (e) {
+                // 나가기 버튼 클릭
+                mixpanel.track('click_bo_dashboard_exit',{'site_code':SITE_CODE});
+            });
+
+						// 알림 버튼 클릭
+	          $('._gnb_notification_button').on('click', function() {
+							mixpanel.track('click_bo_notification', { 'site_code': SITE_CODE });
+	          });
+
+            switch (path) {
+                // 대시보드
+                case '/admin':
+                    mixpanel.track('view_bo_dashboard', {
+	                    'site_code':SITE_CODE,
+                        'source': document.referrer,
+                        'language': ADMIN_LANG_CODE
+                    });
+                    // 내사이트 새탭 열기 클릭
+                    $('.brand-holder').on('click',function(e){
+                      mixpanel.track('click_bo_dashboard_title',{'site_code':SITE_CODE})
+                    })
+                    // 프로필 영역(우측) 클릭
+                    $('#mixpanel_dashboard_profile').on('click',function(e){
+                      mixpanel.track('click_bo_dashboard_profile',{'site_code':SITE_CODE})
+                    })
+                    // 사용버전 업그레이드 클릭 (우측)
+                    $('#mixpanel_dashboard_upgrade_right').on('click',function(e){
+                      mixpanel.track('click_bo_dashboard_upgrade_right',{'site_code':SITE_CODE})
+                    })
+                    // PG 설정 Hover 버튼 클릭 (우측)
+                    $('#mixpanel_dashboard_pg').on('click',function(e){
+                      mixpanel.track('click_bo_dashboard_pg',{
+                        'site_code': SITE_CODE,
+                        'type': 'hover',
+                      })
+                    });
+                    // PG 설정버튼 클릭 (우측)
+                    $('#mixpanel_dashboard_pg_btn').on('click',function(e){
+                      mixpanel.track('click_bo_dashboard_pg',{
+                        'site_code': SITE_CODE,
+                        'type': 'button',
+                      })
+                    });
+	                // 우측 슬라이드 배너 클릭
+	                $('div[id^="mixpanel_banner_"]').on('click', function(e) {
+		                // 'data-index' 값 가져오기
+		                const index = $(this).data('index');
+		                const id = $(this).attr('id');
+		                // 'id'에서 'mixpanel_banner_' 이후의 이름 가져오기
+		                const value = id.substring('mixpanel_banner_'.length);
+
+		                // 'index', 'id' 또는 'value'가 없으면 기록안함
+		                if (typeof index !== 'number' || !id || !value) {
+			                return;
+		                }
+
+		                // Mixpanel 이벤트 추적
+		                mixpanel.track('click_bo_dashboard_banner_right', {'index': index, 'name': value, 'site_code': SITE_CODE});
+	                });
+
+
+
+	                // 네이버 페이 배너 클릭 (우측)
+                    $('#mixpanel_dashboard_npay_banner_right').on('click',function(e){
+
+                      mixpanel.track('click_bo_dashboard_npay_banner_right',{'site_code':SITE_CODE});
+
+
+                    })
+                    // 사이트 이용 기간이 만료되었습니다 팝업 보기
+                    if($('#mixpanel_dashboard_popup_expired').length){
+                      mixpanel.track('view_bo_dashboard_popup_expired',{'site_code':SITE_CODE});
+                    }
+                    // 사이트 이용 기간이 만료되었습니다 팝업 정기결제 등록 버튼 클릭
+                    $('#mixpanel_dashboard_popup_expired_more').on('click',function(e){
+                      mixpanel.track('click_bo_dashboard_popup_expired_more',{'site_code':SITE_CODE});
+                    })
+                    //사이트 이용 기간이 만료되었습니다 팝업 오늘 하루 보지 않기 버튼 클릭
+                    $('#mixpanel_dashboard_popup_expired_no_today').on('click',function(e){
+                      mixpanel.track('click_bo_dashboard_popup_expired_no_today',{'site_code':SITE_CODE});
+                    })
+                    // 튜토리얼 클릭
+                    $('.dashboard_tutorial').on('click', '._check_list:not(button)', function (e) {
+                        mixpanel.track('click_bo_dashboard_tutorial', {
+	                        'site_code':SITE_CODE,
+                          'name': $(e.currentTarget).find('span:not(.check_icon)').text(),
+                        });
+                    });
+
+                    // 튜토리얼 상단 PG 신청 배너 클릭
+                    $('._pg_guide_wrap').on('click', function(e) {
+                      mixpanel.track('click_bo_dashboard_guide_pg_banner',{
+                        'site_code':SITE_CODE,
+                      });
+                    });
+
+                    // 오늘의 할일 클릭
+                    $('.todo-list').on('click', '.tt-list a', function (e) {
+                        let $target = $(e.currentTarget).clone();
+                        $target.find('span').remove();
+
+                        mixpanel.track('click_bo_dashboard_todo', {
+	                        'site_code':SITE_CODE,
+                            'name': $target.text()
+                        });
+                    });
+
+                    // 방문자 현황 클릭
+                    $('.stat-visitor-list').on('click', '.dashboard_card_anchor', function (e) {
+                        mixpanel.track('click_bo_dashboard_visitor',{'site_code':SITE_CODE});
+                    });
+
+                    $('.stat-analytics-list').on('click', '.dashboard_card_anchor', function (e) {
+                        // 일자별 요약 클릭
+                        mixpanel.track('click_bo_dashboard_daily',{'site_code':SITE_CODE});
+                    }).on('click', '.stat-analytics-monthly', function (e) {
+                        // 월별 요약 클릭
+                        mixpanel.track('click_bo_dashboard_monthly',{'site_code':SITE_CODE});
+                    });
+
+                    $('#go_additional_service').on('click', function () {
+                        // 통계 배너 자세히 알아보기 클릭
+                        mixpanel.track('click_bo_dashboard_stat_banner',{'site_code':SITE_CODE});
+                    })
+
+                    // 상품 구매평 클릭
+                    $('.shopping-review').on('click', 'a', function (e) {
+                        const $target = $(e.currentTarget);
+                        let type = '';
+
+                        if ($target.hasClass('answers-title')) {
+                            type = 'title';
+                        } else if ($target.hasClass('answers-item')) {
+                            type = 'item';
+                        }
+
+                        if (type) {
+                            mixpanel.track('click_bo_dashboard_review', {
+	                            'site_code':SITE_CODE,
+                                'type': type
+                            });
+                        }
+                    });
+
+                     // 상품 문의 클릭
+                     $('.shopping-qna').on('click', 'a', function (e) {
+                        const $target = $(e.currentTarget);
+                        let type = '';
+
+                        if ($target.hasClass('answers-title')) {
+                            type = 'title';
+                        } else if ($target.hasClass('answers-item')) {
+                            type = 'item';
+                        }
+
+                        if (type) {
+                            mixpanel.track('click_bo_dashboard_qna', {
+	                            'site_code':SITE_CODE,
+                                'type': type
+                            });
+                        }
+                    });
+
+                    // 컨텐츠 반응 클릭
+                    $('.contents-list').on('click', 'a', function (e) {
+                        const $target = $(e.currentTarget);
+                        let type = '';
+
+                        if ($target.hasClass('dashboard_card_anchor')) {
+                            type = 'title';
+                        } else if ($target.hasClass('contents-item')) {
+                            type = 'item';
+                        }
+
+                        if (type) {
+                            mixpanel.track('click_bo_dashboard_contents', {
+	                            'site_code':SITE_CODE,
+                                'type': type
+                            });
+                        }
+                    });
+
+                    // 아임웹에 문의하신 내역 클릭
+                    $('.contents-myqna').on('click', 'a', function (e) {
+                        const $target = $(e.currentTarget);
+                        let type = '';
+
+                        if ($target.hasClass('dashboard_card_anchor')) {
+                            type = 'title';
+                        } else if ($target.hasClass('myqna-item')) {
+                            type = 'item';
+                        }
+
+                        if (type) {
+                            mixpanel.track('click_bo_dashboard_myqna', {
+	                            'site_code':SITE_CODE,
+                                'type': type
+                            });
+                        }
+                    });
+
+                    // 아임웹 소식 클릭
+                    $('.notice-list').on('click', 'a', function (e) {
+                        const $target = $(e.currentTarget);
+                        let type = '';
+
+                        if ($target.hasClass('dashboard_card_anchor')) {
+                            type = 'title';
+                        } else if ($target.hasClass('notice-item')) {
+                            type = 'item';
+                        }
+
+                        if (type) {
+                            mixpanel.track('click_bo_dashboard_notice', {
+	                            'site_code':SITE_CODE,
+                                'type': type
+                            });
+                        }
+                    });
+
+                    // 아임웹 가이드 클릭
+                    $('.guide-list').on('click', 'a', function (e) {
+                        const $target = $(e.currentTarget);
+                        let type = '';
+
+                        if ($target.hasClass('dashboard_card_anchor')) {
+                            type = 'title';
+                        } else if ($target.hasClass('guide-item')) {
+                            type = 'item';
+                        }
+
+                        if (type) {
+                            mixpanel.track('click_bo_dashboard_guide', {
+	                            'site_code':SITE_CODE,
+                                'type': type
+                            });
+                        }
+                    });
+
+                    // 구매평 배너 클릭
+                    $('.video-review-link').on('click', function () {
+                        mixpanel.track('click_bo_dashboard_review_banner', {
+                            'site_code':SITE_CODE,
+                        });
+                    })
+                    break;
+		            // 사용자관리 > 사용자목록
+	              case '/admin/member/list':
+			            let memberViewMode = params.get('mode');
+		              let memberDetailView = params.get('idx');
+		              if(memberViewMode!=='add') {mixpanel.track('view_bo_member_list',{'site_code':SITE_CODE})}
+		              if(memberDetailView) {mixpanel.track('view_bo_member_list_detail',{'site_code':SITE_CODE})}
+			            $('[data-mixpanel="click_bo_member_list_import"]').on('click',function(){
+				            mixpanel.track('click_bo_member_list_import',{'site_code':SITE_CODE})
+			            })
+		              $(document).on('click', '[data-mixpanel="click_bo_member_list_import_sample"]', function() {
+
+			              mixpanel.track('click_bo_member_list_import_sample', {'site_code': SITE_CODE});
+
+		              });
+		              $(document).on('click', '[data-mixpanel="click_bo_member_list_import_upload"]', function() {
+			              mixpanel.track('click_bo_member_list_import_upload', {'site_code': SITE_CODE});
+		              });
+		              $(document).on('click', '[data-mixpanel="click_bo_member_list_import_checkcode"]', function() {
+			              mixpanel.track('click_bo_member_list_import_checkcode', {'site_code': SITE_CODE});
+		              });
+		              $(document).on('click', '[data-mixpanel="click_bo_member_list_add"]', function() {
+			              mixpanel.track('click_bo_member_list_add', {'site_code': SITE_CODE});
+		              });
+		              $(document).on('click', '[data-mixpanel="click_bo_member_list_export"]', function() {
+			              mixpanel.track('click_bo_member_list_export', {'site_code': SITE_CODE});
+		              });
+		              $(document).on('click', '[data-mixpanel="click_bo_member_list_delete_item"]', function() {
+			              let position = $(this).data('button-position');
+			              let count = parseInt($('#select_cnt').text())
+			              mixpanel.track('click_bo_member_list_delete_item', {'count':count,'source':position,'site_code': SITE_CODE});
+		              });
+		              $(document).on('click', '[data-mixpanel="click_bo_member_list_detail"]', function() {
+			              mixpanel.track('click_bo_member_list_detail', {'site_code': SITE_CODE});
+		              });
+		              break;
+
+                // 사용자관리 > 메세지 보내기(기본)
+                case '/admin/member/send':
+									const mode = params.get('mode');
+									const type = params.get('type');
+                  // 메세지 보내기 페이지 확인
+                  if(location.search==='' || mode==='alarm'||mode ==='sms'){mixpanel.track('view_bo_member_message_view',{'site_code':SITE_CODE});}
+                  // 최근 30일 발송알림 페이지
+                  if(mode==='alarm_list' && type==='default'){
+                    mixpanel.track('view_bo_member_message_notification_sent',{'site_code':SITE_CODE});
+
+                    // 삭제버튼인지 항목 클릭하는 건지 확인
+                    $('#mixpanel_message_notification_list').on('click',function(e){
+                      if(e.target.id==='mixpanel_bo_member_message_notification_sent_item'){
+                        // 최근 예약 발송 알림 항목 클릭
+                        mixpanel.track('click_bo_member_message_notification_sent_item',{'site_code':SITE_CODE})
+                      }else if(e.target.id==='mixpanel_bo_member_message_notification_sent_item_delete'){
+                        // 최근 예약 발송 알림 항목 예약 취소 및 삭제 클릭
+                        mixpanel.track('click_bo_member_message_notification_sent_item_delete',{'site_code':SITE_CODE})
+                      }
+                    })
+                    // 최근 예약발송 알림 페이지
+                  }else if(mode==='alarm_list' && type==='booking'){
+                    mixpanel.track('view_bo_member_message_notification_scheduled',{'site_code':SITE_CODE});
+                    // 삭제버튼인지 항목 클릭하는 건지 확인
+                    $('#mixpanel_message_notification_list').on('click',function(e){
+                      if(e.target.id==='mixpanel_bo_member_message_notification_sent_item'){
+                        // 최근 예약 발송 알림 항목 클릭
+                        mixpanel.track('click_bo_member_message_notification_sent_item',{'site_code':SITE_CODE})
+                      }else if(e.target.id==='mixpanel_bo_member_message_notification_sent_item_delete'){
+                        // 최근 예약 발송 알림 항목 예약 취소 및 삭제 클릭
+                        mixpanel.track('click_bo_member_message_notification_sent_item_delete',{'site_code':SITE_CODE})
+                      }
+                    })
+                  }
+                  // 최근 30일 발송 알림 클릭
+                  $('#mixpanel_member_message_notification_sent').on('click',function(e){
+                    mixpanel.track('click_bo_member_message_notification_sent',{'site_code':SITE_CODE});
+                  })
+                  // 최근 예약 발송 알림 클릭
+                  $('#mixpanel_member_message_notification_scheduled').on('click',function(e){
+                    mixpanel.track('click_bo_member_message_notification_scheduled',{'site_code':SITE_CODE});
+                  })
+                  // 메시지 보내기 상단 탭 클릭
+                  $('ul.nav.nav-tabs').on('click','a',function(e){
+                    let hrefValue = $(this).attr('href')
+                    let nameValue = hrefValue.split('?')[1].split('=')[1];
+                    mixpanel.track('click_bo_member_message_tab',{'name':nameValue,'site_code':SITE_CODE});
+
+                  })
+                  // SMS 광고성 문자메시지 전송시 주의사항 클릭
+                  $('.alert.alert-info a').on('click',function(e){
+                    mixpanel.track('click_bo_member_message_sms_warning',{'site_code':SITE_CODE})
+                  })
+                  // SMS 추가 구입 버튼 클릭
+                  $('.form-group a').on('click',function(e){
+                    // onclick 값으로 확인합니다.
+                    if($(this).attr('onclick')==='adminMember.openChargeSmsform(\'member\')'){mixpanel.track('click_bo_member_message_sms_purchase',{'site_code':SITE_CODE});}
+                  })
+                  // 발신번호 등록/변경 버튼 클릭
+                  $('#mixpanel_member_message_sms_add_calling').on('click',function(e){
+                    mixpanel.track('click_bo_member_message_sms_add_calling',{'site_code':SITE_CODE});
+                  })
+                  // 문자메세지(SMS) 충전 충전하기 클릭 폼 데이터 제출 이벤트 핸들링
+                  $(document).on('submit','#payment_submit_form',function(e){
+                    // 부가가치세 비율 10%
+                    const TAX_RATE = 0.1
+                    const formData = $(this).serializeArray()
+                    const priceObj = formData.find(item => item.name ==='price');
+                    const selPaymentTypeObj = formData.find(item => item.name ==='sel_payment_type');
+                    const priceValue = priceObj ? parseInt(priceObj.value) : null;
+                    const selPaymentTypeValue = selPaymentTypeObj ? selPaymentTypeObj.value : null;
+                    const priceValueTax = priceValue + (priceValue * TAX_RATE)
+                    mixpanel.track('click_bo_member_message_sms_checkout',{'price':priceValueTax,'payment_method':selPaymentTypeValue,'site_code':SITE_CODE});
+                  })
+                  // SMS,alarm 탭 공용 보내기 버튼
+                  $('#sendsms').on('click',function(e){
+                    let is_sms = $(this).attr('onclick');
+                    let scheduledCheckBoxValue = $('input[name="is_booking"]').is(':checked');
+                    // SMS 보내기 버튼
+                    if(is_sms==="send_sms()"){
+
+                      // alarm 보내기 버튼
+                    }else if(is_sms==="send_alarm()"){
+                      let displayValue = $('#alarm_img_group').css('display');
+                      //display 값으로 image를 보여주고 제거해주는 것을 이용합니다.
+                      displayValue === 'inline-block' ? mixpanel.track('complete_bo_member_message_notification_send',{'image':true,'scheduled':scheduledCheckBoxValue,'site_code':SITE_CODE}) : mixpanel.track('complete_bo_member_message_notification_send',{'image':false,'scheduled':scheduledCheckBoxValue,'site_code':SITE_CODE});
+                    }
+                  })
+
+
+
+                  break;
+
+                // 환경설정 > 기본설정
+                case '/admin/config/default':
+                    mixpanel.track('view_bo_settings_general',{'site_code':SITE_CODE});
+                    break;
+		            case '/admin/config/membership':
+			            const membershipUrlMode = params.get('mode') || "";
+			            if (membershipUrlMode === "join" || membershipUrlMode === "") {
+				            mixpanel.track('view_bo_settings_member_signup',{'site_code':SITE_CODE});
+									}
+			            if (membershipUrlMode === "group") {
+				            mixpanel.track('view_bo_settings_member_group',{'site_code':SITE_CODE});
+			            }
+			            $(document).on('click', '[data-mixpanel="click_bo_settings_member_shopping_group_change_apply"]', function() {
+
+				            mixpanel.track('click_bo_settings_member_shopping_group_change_apply', {'site_code': SITE_CODE});
+
+			            });
+
+			            console.log("mode 값", membershipUrlMode);
+		              break;
+                // 환경설정 > 전자결제 설정
+                case '/admin/config/pg':
+                    if (params.get('mode') === 'eximbay') {
+                        // 엑심베이
+                        mixpanel.track('view_bo_eximbay',{'site_code':SITE_CODE});
+                        // 엑심베이 가입 신청하기 클릭
+                        $('.description-list').on('click', '.eximbay-apply', function (e) {
+                            mixpanel.track('click_bo_eximbay_apply',{'site_code':SITE_CODE});
+                        });
+                    } else if (params.get('mode') === 'paypal') {
+                        // 페이팔
+                        mixpanel.track('view_bo_paypal',{'site_code':SITE_CODE});
+                    } else if (params.get('mode') === 'deposit_confirmation') {
+                        // 자동 입금확인 - 뱅크다
+                        mixpanel.track('view_bo_bankda',{'site_code':SITE_CODE});
+
+                        // 뱅크다 신청하기 클릭
+                        $('#pg_detail_wrap').on('click', '.btn-bankda', function (e) {
+                            mixpanel.track('click_bo_bankda_apply',{'site_code':SITE_CODE});
+                        });
+                    } else if (params.get('mode') === 'talkpay') {
+                        // 카카오페이
+                        mixpanel.track('view_bo_kakaopay',{'site_code':SITE_CODE});
+
+                        // 카카오페이 서비스 신청 클릭
+                        $('.kakaopay-visual').on('click', '.kakaopay-apply', function (e) {
+                            mixpanel.track('click_bo_kakaopay_apply',{'site_code':SITE_CODE});
+                        });
+                    } else if (params.get('mode') === 'naver') {
+                        // 네이버페이
+                        mixpanel.track('view_bo_naverpay',{'site_code':SITE_CODE});
+
+                        // 네이버페이 서비스 신청 클릭
+                        $('#app').on('click', '.npay-btn-area .btn-naver', function (e) {
+                            mixpanel.track('click_bo_naverpay_apply',{'site_code':SITE_CODE});
+                        });
+
+                        // 네이버페이 주문형 신청 클릭
+                        $('#app').on('click', '.npay-type', function (e) {
+                            mixpanel.track('click_bo_naverpay_apply_order',{'site_code':SITE_CODE});
+                        });
+                    } else if (params.get('mode') === 'common') {
+                        // 공통 설정
+                        mixpanel.track('view_bo_pg_common_settings',{'site_code':SITE_CODE});
+                    } else if (params.get('mode') === 'samsungpay') {
+	                    mixpanel.track('view_bo_samsungpay',{'site_code':SITE_CODE});
+                    } else if (params.get('mode') === 'danal') {
+	                    mixpanel.track('view_bo_danal',{'site_code':SITE_CODE});
+                    }
+                    break;
+                // 환경설정 > 도메인 구입 및 설정
+                case '/admin/config/domain':
+                    mixpanel.track('view_bo_domain',{'site_code':SITE_CODE})
+                    $('#use_domain_redirect').on('click',function(e){
+                      let isChecked = $(this).prop('checked');
+                    mixpanel.track('click_bo_domain_redirect_default',{'checked': isChecked,'site_code':SITE_CODE})
+                    })
+                    $('#use_domain_www').on('click',function(e){
+                      let isChecked = $(this).prop('checked');
+                      mixpanel.track('click_bo_domain_www',{'checked': isChecked,'site_code':SITE_CODE})
+                    })
+                    //도메인 설명 자세히 알아보기 버튼
+                    $('#mixpanel_domain_exist_help').on('click', function(e) {
+                     mixpanel.track('click_bo_domain_add_exist_help',{'site_code':SITE_CODE});
+                    });
+                    //도메인 구입/연결 버튼
+                    $('#mixpanel_domain_purchase_and_connect_button').on('click', function(e) {
+                      mixpanel.track('click_bo_domain_add',{'site_code':SITE_CODE});
+                    });
+                    //도메인 구입/연결 > 내 도메인 연결하기
+                    $('#cocoaModal').on('click', '#mixpanel_my_domain_connect', function(e){
+                      mixpanel.track('click_bo_domain_add_exist',{'site_code':SITE_CODE});
+                    })
+                    //도메인 구입/연결 > 새 도메인구입하기 > 이 도메인 구매하기 버튼
+                    $('#cocoaSubModal').on('click', '#mixpanel_this_domain_purchase', function(e){
+                      let textValue = $('#search_domain_name').val();
+                      mixpanel.track('click_bo_domain_buy_domain',{'name':textValue,'site_code':SITE_CODE});
+                    })
+                    //도메인 구입/연결 > 새 도메인구입하기 > 이 도메인 구매하기 버튼 > 도메인 신청 및 결제
+                    $('#cocoaSubModal').on('click', '#mixpanel_domain_enroll_payment', function(e){
+                      let totalPriceText = $('.text-primary._total_price').text();
+                      let totalPriceNumber = parseInt(totalPriceText.replace(',', '').replace('원', ''));
+                      let paymentMethodValue = $('input[name=sel_payment_type]:checked').val();
+                      let selectedValue = parseInt($('input[name=period]:checked').val());
+                      let domainNameValue = $('#formModalLabel').text().split(' ')[0];
+                      mixpanel.track('click_bo_domain_buy_domain_detail',{'name':domainNameValue,'count':selectedValue,'price':totalPriceNumber,'payment_method':paymentMethodValue,'site_code':SITE_CODE});
+                    })
+
+                    break;
+                // 쇼핑 > 상품 관리
+	            case '/admin/shopping/product':
+		            $('#prod_list_body').on('click', '[id^=mixpanel_bo_shopping_item_list_status_]', function(e) {
+			            let clickedId = $(this).attr('id').replace('mixpanel_bo_shopping_item_list_status_', '');
+
+			            if (clickedId === 'sale') {
+							mixpanel.track('click_bo_shopping_item_list_status',{'site_code':SITE_CODE,'name':'판매중'});
+			            } else if (clickedId === 'nosale') {
+				            mixpanel.track('click_bo_shopping_item_list_status',{'site_code':SITE_CODE,'name':'숨김'});
+			            } else if (clickedId === 'soldout'){
+				            mixpanel.track('click_bo_shopping_item_list_status',{'site_code':SITE_CODE,'name':'품절'});
+			            }
+		            });
+                    // 상품 일괄 추가 버튼 클릭
+                    $('._option_list').on('click', '.multi-prod-add-btn', function (e) {
+                        mixpanel.track('click_bo_shopping_item_import',{'site_code':SITE_CODE});
+                    });
+					// $('[data-mixpanel="click_bo_shopping_item_export"]').on('click',function(){
+					// 	mixpanel.track('click_bo_shopping_item_export',{'site_code':SITE_CODE})
+					// })
+                    if (params.get('mode') === 'add') {
+                        let category = '';
+                        $('#prod_selected_category_list .text-default').each(function(index, item) {
+                            category += (index!==0)?' | ':'' + $(item).text().trim();
+                        });
+
+                        // 상품 편집 보기
+                        mixpanel.track('view_bo_shopping_item', {
+                            'product_name': $('[name^="name_"]').val(),
+                            'product_type': $('[name="prod_type"]:checked').val(),
+                            'product_category': category,
+                            'price': $('[name^="price_"]').val(),
+	                        'site_code':SITE_CODE
+                        });
+
+                    } else {
+                        // 상품 목록 보기
+                        mixpanel.track('view_bo_shopping_item_list',{'site_code':SITE_CODE});
+                    }
+
+					// 상태별 보기 클릭
+		            $(".owl-stage").on("click", "li._all, li._sale, li._soldout, li._nosale", function(e) {
+						let statusName =  $(this).attr("class").split(' ')[1].split('_')[1]
+			            mixpanel.track('click_bo_shopping_item_view_status',{
+							'site_code':SITE_CODE,
+				            'name': statusName
+						});
+			            // 이벤트 버블링을 방지합니다.
+			            e.stopPropagation();
+		            });
+                    break;
+                // 쇼핑 > 연동 상품 관리
+                case '/admin/shopping/interlocking':
+                    if (!params.get('mode')) {
+                        // 연동 상품 관리 보기
+                        mixpanel.track('view_bo_channel_list',{'site_code':SITE_CODE});
+                    }
+					$('[data-mixpanel="click_bo_channel_zigzag_help"]').on('click',function(){
+						mixpanel.track('click_bo_channel_zigzag_help',{'site_code':SITE_CODE})
+					})
+	                $('[data-mixpanel="click_bo_channel_zigzag_partner_center_link"]').on('click',function(){
+		                mixpanel.track('click_bo_channel_zigzag_partner_center_link',{'site_code':SITE_CODE})
+	                })
+                    // 판매채널 관리 버튼 클릭
+                    $('#prod_list_no_prod').on('click', 'button.btn-add-channel', function (e) {
+                        mixpanel.track('click_bo_channel_manage',{'site_code':SITE_CODE});
+                    });
+
+                    // 지그재그 입점신청 버튼 클릭
+	                $('[data-mixpanel="click_bo_channel_zigzag_apply"]').on('click',function(){
+		                mixpanel.track('click_bo_channel_zigzag_apply',{'site_code':SITE_CODE})
+	                })
+                    break;
+                // 쇼핑 > 주문 관리
+                case '/admin/shopping/order':
+                    if (!params.get('mode')) {
+                        // 목록 보기
+                        mixpanel.track('view_bo_order_list', {
+	                        'site_code':SITE_CODE,
+                            'name': params.get('status') ?? 'NEW'
+                        });
+                    }
+                    break;
+                // 쇼핑 > 취소 관리
+                case 'admin/shopping/cancel':
+                    if (!params.get('mode')) {
+                        // 목록 보기
+                        mixpanel.track('view_bo_cancel_list', {
+	                        'site_code':SITE_CODE,
+                            'name': params.get('status') ?? 'NEW'
+                        });
+                    }
+                    break;
+                // 쇼핑 > 반품 관리
+                case '/admin/shopping/return':
+                    if (!params.get('mode')) {
+                        // 목록 보기
+                        mixpanel.track('view_bo_return_list', {
+	                        'site_code':SITE_CODE,
+                            'name': params.get('status') ?? 'NEW'
+                        });
+                    }
+                    break;
+                // 쇼핑 > 교환 관리
+                case '/admin/shopping/exchange':
+                    if (!params.get('mode')) {
+                        // 목록 보기
+                        mixpanel.track('view_bo_exchange_list', {
+	                        'site_code':SITE_CODE,
+                            'name': params.get('status') ?? 'NEW'
+                        });
+                    }
+                    break;
+                // 쇼핑 > 정기구독
+                case '/admin/shopping/regularly':
+                    // 정기구독 관리 보기
+                    mixpanel.track('view_bo_subscription',{'site_code':SITE_CODE});
+                    break;
+                // 쇼핑 > 구매평 관리
+                case '/admin/shopping/review':
+                    // 구매평 관리 보기
+                    mixpanel.track('view_bo_shopping_review_list',{'site_code':SITE_CODE});
+					const isExternalMode = params.get('mode') === 'external';
+					const isListMode = params.get('mode') === 'list';
+					if (isExternalMode) {
+						// BO 쇼핑 구매평 부가서비스 페이지 조회
+						// param에 type이 넘어오지 않을 경우 현재 사용 중인 서비스로 연결되므로 type을 param으로 판단하면 안됨
+						const reviewServiceType = $('#review_external input[name=external_type]').val();
+						mixpanel.track(`view_bo_shopping_${reviewServiceType}`,{'site_code':SITE_CODE});
+						//BO 쇼핑 구매평 부가서비스 [서비스 신청] 클릭
+						$(`#mixpanel_click_bo_shopping_${reviewServiceType}_apply`).on('click',function(e){
+							mixpanel.track(`click_bo_shopping_${reviewServiceType}_apply`,{'site_code':SITE_CODE});												
+						});
+					}
+
+                    // 구매평 프로모션 배너 클릭
+                    $('.review-promotion-banner').click(function () {
+                        mixpanel.track('click_bo_shopping_review_promotion_banner',{'site_code':SITE_CODE});
+                    })
+
+                    break;
+                // 쇼핑 > 문의 관리
+                case '/admin/shopping/answers':
+                    // 문의 관리 보기
+                    mixpanel.track('view_bo_shopping_qna_list',{'site_code':SITE_CODE});
+                    break;
+                // 쇼핑 > 적립금 관리
+                case '/admin/shopping/mileage':
+                    // 적립금 관리 보기
+                    mixpanel.track('view_bo_shopping_point',{'site_code':SITE_CODE});
+                    break;
+                // 쇼핑 > 쿠폰 관리
+                case '/admin/shopping/coupon':
+                    if (!params.get('mode')) {
+                        // 관리 보기
+                        mixpanel.track('view_bo_shopping_coupon',{'site_code':SITE_CODE});
+                    } else if (params.get('code')) {
+                        // 쿠폰 상세 보기
+                        mixpanel.track('view_bo_shopping_coupon_item', {
+	                        'site_code':SITE_CODE,
+                            'name': $('[name="name"]').val(),
+                            'type': $('.coupon-type').data('type'),
+                            'target': $('.coupon-target').data('target'),
+                            'offer_type': getOfferTypeFromBenefitType($('[name="benefit_type"]').val())
+                        });
+                    }
+                    break;
+                // 쇼핑 > 네이버/카카오 쇼핑
+                case '/admin/shopping/naver':
+                    // 네이버/카카오 쇼핑 보기
+                    mixpanel.track('view_bo_shopping_naverkakao',{'site_code':SITE_CODE});
+
+                    $('.section-body').on('click', '.btn-naver, .btn-naver-notice, .btn-naver-center', function (e) {
+                        const $target = $(e.currentTarget);
+
+                        if ($target.hasClass('btn-naver')) {
+                            // 네이버쇼핑 입점신청 버튼 클릭
+                            mixpanel.track('click_bo_shopping_naverkakao_naver_apply',{'site_code':SITE_CODE});
+                        } else if ($target.hasClass('btn-naver-notice')) {
+                            // 네이버쇼핑 입점방법 안내 버튼 클릭
+                            mixpanel.track('click_bo_shopping_naverkakao_naver_help',{'site_code':SITE_CODE});
+                        } else if ($target.hasClass('btn-naver-center')) {
+                            // 네이버쇼핑 파트너센터 링크 클릭
+                            mixpanel.track('click_bo_shopping_naverkakao_naver_center',{'site_code':SITE_CODE});
+                        }
+                    });
+
+                    $('.section-body').on('click', '.btn-kakao, .btn-kakao-notice, .btn-kakao-center', function (e) {
+                        const $target = $(e.currentTarget);
+
+                        if ($target.hasClass('btn-kakao')) {
+                            // 카카오 쇼핑하우 입점신청 버튼 클릭
+                            mixpanel.track('click_bo_shopping_naverkakao_kakao_apply',{'site_code':SITE_CODE});
+                        } else if ($target.hasClass('btn-kakao-notice')) {
+                            // 카카오 쇼핑하우 입점방법 안내 버튼 클릭
+                            mixpanel.track('click_bo_shopping_naverkakao_kakao_help',{'site_code':SITE_CODE});
+                        } else if ($target.hasClass('btn-kakao-center')) {
+                            // 카카오 쇼핑하우 비즈센터 링크 클릭
+                            mixpanel.track('click_bo_shopping_naverkakao_kakao_center',{'site_code':SITE_CODE});
+                        }
+                    });
+                    break;
+                // 쇼핑 > 배송 관리
+                case '/admin/shopping/shipping':
+                    // 배송 관리 보기
+                    mixpanel.track('view_bo_shopping_shipping',{'site_code':SITE_CODE});
+
+                    $('.card-courier').on('click', '.btn-goodsflow', function (e) {
+                        mixpanel.track('click_bo_shopping_goodsflow_courier_apply',{'site_code':SITE_CODE});
+                    });
+                    break;
+                // 쇼핑 > 환경설정
+                case '/admin/shopping/config':
+                    // 환경설정 보기
+                    mixpanel.track('view_bo_shopping_settings',{'site_code':SITE_CODE});
+
+                    $('.fassto').on('click', '.btn-fassto', function (e) {
+                        // 쇼핑 환경설정 FASTO 배너 클릭
+                        mixpanel.track('click_bo_shopping_settings_fasto',{'site_code':SITE_CODE});
+                    });
+                    break;
+                // 예약 > 객실/사이트 관리
+                case '/admin/booking':
+                case '/admin/booking/product':
+                    if (!params.get('mode')) {
+                        // 객실/사이트 목록 보기
+                        mixpanel.track('view_bo_booking_item_list',{'site_code':SITE_CODE});
+                    } else if (params.get('idx')) {
+                        // 상품 편집 보기
+                        mixpanel.track('view_bo_booking_item', {
+	                        'site_code':SITE_CODE,
+                            'name': $('[name^=name_]').val()
+                        });
+                    }
+
+                    // 상태별 클릭
+                    $('.section-body').on('click', '.booking-status', function (e) {
+                        mixpanel.track('click_bo_booking_status', {
+	                        'site_code':SITE_CODE,
+                            'name': $(e.currentTarget).data('name')
+                        });
+                    });
+                    break;
+                // 예약 > 예약 현황 관리
+                case '/admin/booking/order_cal':
+                    // 예약 현황 관리 보기
+                    mixpanel.track('view_bo_booking_calendar',{'site_code':SITE_CODE});
+                    break;
+                // 예약 > 예약 신청 관리
+                case '/admin/booking/order':
+                    // 예약 신청 관리 보기
+                    mixpanel.track('view_bo_booking_reservation',{'site_code':SITE_CODE});
+
+                    // 예약 신청 관리 상태별 클릭
+                    $('.section-body').on('click', '.reservation-status', function (e) {
+                        mixpanel.track('click_bo_booking_reservation_status', {
+	                        'site_code':SITE_CODE,
+                            'name': $(e.currentTarget).data('name')
+                        });
+                    });
+                    break;
+                // 예약 > 후기 관리
+                case '/admin/booking/review':
+                    // 후기 관리 보기
+                    mixpanel.track('view_bo_booking_review_list',{'site_code':SITE_CODE});
+                    break;
+                // 예약 > 문의 관리
+                case '/admin/booking/answers':
+                    // 문의관리 보기
+                    mixpanel.track('view_bo_booking_qna_list',{'site_code':SITE_CODE});
+                    break;
+                // 예약 > 옵션 관리
+                case '/admin/booking/option':
+                    if (!params.get('mode')) {
+                        // 옵션 관리 보기
+                        mixpanel.track('view_bo_booking_option',{'site_code':SITE_CODE});
+                    } else if (params.get('idx')) {
+                        // 옵션 상세 보기
+                        mixpanel.track('view_bo_booking_option_detail', {
+	                        'site_code':SITE_CODE,
+                            'name': $('[name^="name_"]').val(),
+                            'required': $('[name="require_check"]').val() === 'ok',
+                            'price': $('[name^="price"]').val(),
+                            'min_quantity': $('[name="option_min_count"]').val(),
+                            'max_quantity': $('[name="option_max_count"]').val()
+                        });
+                    }
+
+                    // 옵션 추가 버튼 클릭
+                    $('._option_list').on('click', '.btn-option', function (e) {
+                        mixpanel.track('click_bo_booking_option_create',{'site_code':SITE_CODE});
+                    });
+                    break;
+                // 예약 > 성수기/휴일 관리
+                case '/admin/booking/season':
+                    // 성수기/휴일 관리 보기
+                    mixpanel.track('view_bo_booking_season',{'site_code':SITE_CODE});
+                    break;
+                // 예약 > 예약 설정
+                case '/admin/booking/config':
+                    // 예약 설정 보기
+                    mixpanel.track('view_bo_booking_settings',{'site_code':SITE_CODE});
+                    break;
+                // 컨텐츠 관리 > 게시물 관리
+                case '/admin/contents/post':
+                    if (!params.get('mode')) {
+                        // 게시물 관리 보기
+                        mixpanel.track('view_bo_content_post',{'site_code':SITE_CODE});
+                    }
+
+                    // 게시물 클릭
+                    $('.section-body').on('click', 'a.post-link', function (e) {
+                        mixpanel.track('click_bo_content_post_detail',{'site_code':SITE_CODE});
+                    });
+
+                    // 게시판 클릭
+                    $('.section-body').on('click', '[id^="board_item_"]', function (e) {
+                        mixpanel.track('click_bo_content_post_group',{'site_code':SITE_CODE});
+                    });
+                    break;
+                // 컨텐츠 관리 > 댓글 관리
+                case '/admin/contents/comment':
+                    // 댓글 관리 보기
+                    mixpanel.track('view_bo_content_comment',{'site_code':SITE_CODE});
+
+                    // 게시물 클릭
+                    $('#comment_manage_list').on('click', '.post-link', function (e) {
+                        mixpanel.track('click_bo_content_comment_post',{'site_code':SITE_CODE});
+                    });
+                    break;
+                // 컨텐츠 관리 > 입력폼 관리
+                case '/admin/contents/form':
+                    if (params.get('idx')) {
+                        // 입력폼 상세 보기
+                        mixpanel.track('view_bo_content_form_detail',{'site_code':SITE_CODE});
+                    } else {
+                        // 입력폼 관리 보기
+                        mixpanel.track('view_bo_content_form',{'site_code':SITE_CODE});
+                    }
+
+                    // 입력폼 그룹 클릭
+                    $('.section-body').on('click', '[id^="board_item_"]', function (e) {
+                        mixpanel.track('click_bo_content_form_group',{'site_code':SITE_CODE});
+                    });
+                    break;
+                // 컨텐츠 관리 > 지도 관리
+                case '/admin/contents/map':
+                    if (params.get('code')) {
+                        // 지도 상세 보기
+                        mixpanel.track('view_bo_content_map_detail',{'site_code':SITE_CODE});
+                    } else {
+                        // 지도 관리 보기
+                        mixpanel.track('view_bo_content_map',{'site_code':SITE_CODE});
+                    }
+
+                    // 지도 양식 클릭
+                    $('.section-body').on('click', '[id^="board_item_"]', function (e) {
+                        mixpanel.track('click_bo_content_map_group',{'site_code':SITE_CODE});
+                    });
+                    break;
+                // 컨텐츠 관리 > 일정 관리
+                case 'admin/contents/calendar':
+                    if (params.get('code')) {
+                        // 일정 상세 보기
+                        mixpanel.track('view_bo_content_calendar_detail',{'site_code':SITE_CODE});
+                    } else {
+                        // 일정 관리 보기
+                        mixpanel.track('view_bo_content_calendar',{'site_code':SITE_CODE});
+                    }
+
+                    // 일정 양식 클릭
+                    $('.section-body').on('click', '[id^="board_item_"]', function (e) {
+                        mixpanel.track('click_bo_content_calendar_group',{'site_code':SITE_CODE});
+                    });
+                    break;
+                // 컨텐츠 관리 > 갤러리 관리
+                case '/admin/contents/gallery':
+                    if (params.get('code')) {
+                        // 갤러리 상세 보기
+                        mixpanel.track('view_bo_content_gallery_detail',{'site_code':SITE_CODE});
+                    } else {
+                        // 갤러리 관리 보기
+                        mixpanel.track('view_bo_content_gallery',{'site_code':SITE_CODE});
+                    }
+
+                    // 갤러리 양식 클릭
+                    $('.section-body').on('click', '[id^="board_item_"]', function (e) {
+                        mixpanel.track('click_bo_content_gallery_group',{'site_code':SITE_CODE});
+                    });
+                    break;
+                // 컨텐츠 관리 > 신고/차단
+                case '/admin/contents/report':
+                    // 신고/차단 관리 보기
+                    mixpanel.track('view_bo_content_report',{'site_code':SITE_CODE});
+
+                    // 신고/차단 관리 상태별 클릭
+                    $('.section-body').on('click', '.nav li a', function (e) {
+                        let $target = $(e.currentTarget).clone();
+                        $target.find('span').remove();
+
+                        mixpanel.track('click_bo_content_report_status', {
+	                        'site_code':SITE_CODE,
+                            'name': $target.text()
+                        });
+                    });
+                    break;
+                // 마케팅 관리 > 전환추적/리타게팅 관리
+                case '/admin/marketing/trace':
+                    // 전환추적/리타게팅 관리 보기
+                    mixpanel.track('view_bo_marketing_tracking',{'site_code':SITE_CODE});
+                    break;
+                // 마케팅 관리 > 페이스북 마케팅(FBE)
+                case '/admin/marketing/facebook_fbe':
+                    // 페이스북 마케팅(FBE) 보기
+                    mixpanel.track('view_bo_marketing_fbe',{'site_code':SITE_CODE});
+
+                    // 시작하기 버튼 클릭
+                    $('.section-body').on('click', '._open_fbe_btn', function (e) {
+                        mixpanel.track('click_bo_marketing_fbe_start',{'site_code':SITE_CODE});
+                    });
+                    break;
+                // 마케팅 관리 > 에이스카운터
+		        // 파트너를 제외한 에이스카운터는 통계로 이동하였습니다. 현재는 파트너만 기록하고 있는 값입니다.
+                case '/admin/marketing/ace_counter':
+                    // 에이스카운터 보기
+                    mixpanel.track('view_bo_marketing_ace',{'site_code':SITE_CODE});
+
+                    // 신청하기 버튼 클릭
+                    $('.section-body').on('click', '._open_ace_btn', function (e) {
+                        mixpanel.track('click_bo_marketing_ace_apply',{'site_code':SITE_CODE});
+                    });
+                    break;
+                // App 신청 및 관리 > Android 앱
+                case '/admin/app/android':
+                    // Android 앱 보기
+                    mixpanel.track('view_bo_app_android',{'site_code':SITE_CODE});
+
+                    // 신청하기 버튼 클릭
+                    $('.card').on('click', '.app-btn', function (e) {
+                        mixpanel.track('click_bo_app_android_apply',{'site_code':SITE_CODE});
+                    });
+                    break;
+                // 결제/앱스토어
+                case '/admin/payment':
+                    if (!location.search) {
+                        // 결제/앱스토어 보기
+                        mixpanel.track('view_bo_appstore_payment',{'site_code':SITE_CODE});
+                    } else if (params.get('mode') === 'history') {
+                        // 결제내역 보기
+                        mixpanel.track('view_bo_payment_history',{'site_code':SITE_CODE});
+                    } else if (params.get('mode') === 'detail') {
+                        // 결제 페이지 보기
+                        mixpanel.track('view_bo_checkout', {
+	                        'site_code':SITE_CODE,
+                            'product_category': params.get('type')
+                        });
+                    } else if (params.get('mode') === 'service_detail') {
+											const detail = params.get('detail');
+
+											// 사용 가능한 앱 상세페이지
+	                    const pageViewEvent = {
+												kiwisnap: 'view_bo_appstore_kiwisnap',
+		                    ifdo: 'view_bo_appstore_ifdo',
+	                    }[detail];
+
+											if (pageViewEvent)  {
+												mixpanel.track(pageViewEvent, {
+													site_code: SITE_CODE,
+												});
+											}
+                    }
+		                $('[data-mixpanel="click_bo_appstore_app_add"]').on('click', function (e) {
+			                mixpanel.track('click_bo_appstore_app_add', {
+												'app_id': $(this).data('app-id'),
+				                'app_name': $(this).data('app-name'),
+				                'site_code':SITE_CODE
+			                });
+		                });
+
+                    // Google 개발자 계정 등록 버튼 클릭
+                    $('.section-body').on('click', '.android-link', function (e) {
+                        mixpanel.track('click_bo_app_android_google_developer',{'site_code':SITE_CODE});
+                    });
+                    break;
+                // App 신청 및 관리 > iOS 앱
+                case '/admin/app/ios':
+                    // Android 앱 보기
+                    mixpanel.track('view_bo_app_ios',{'site_code':SITE_CODE});
+
+                    // 신청하기 버튼 클릭
+                    $('.card').on('click', '.app-btn.ios', function (e) {
+                        mixpanel.track('click_bo_app_ios_apply',{'site_code':SITE_CODE});
+                    });
+                    break;
+                // 통계 > 개요
+                case '/admin/stat/summary':
+                    // 통계 개요 보기
+                    mixpanel.track('view_bo_stat_summary',{'site_code':SITE_CODE});
+                    break;
+                // 통계 > 기간별 분석
+                case '/admin/stat/analytics':
+                    // 기간별 분석 보기
+                    mixpanel.track('view_bo_stat_analytics',{'site_code':SITE_CODE});
+
+                    // 요약 보기 클릭
+                    $('.section-body').on('change', '#analyticsType', function (e) {
+                        let value = $(e.currentTarget).val();
+                        let event = '';
+
+                        if (value === 'days') {
+                            event = 'click_bo_stat_analytics_daily';
+                        } else if (value === 'month'){
+                            event = 'click_bo_stat_analytics_monthly';
+                        }
+
+                        if (event) {
+                            mixpanel.track(event,{'site_code':SITE_CODE});
+                        }
+                    });
+
+                    // 새로고침 클릭
+                    $('.section-body').on('click', '.btn-refresh', function (e) {
+                        mixpanel.track('click_bo_stat_analytics_refresh',{'site_code':SITE_CODE});
+                    });
+
+                    // 내보내기 클릭
+                    $('.section-body').on('click', '.btn-download', function (e) {
+                        mixpanel.track('click_bo_stat_analytics_export',{'site_code':SITE_CODE});
+                    });
+                    break;
+                // 통계 > 적립금 통계
+                case '/admin/stat/mileage':
+                    // 적립금 통계 보기
+                    mixpanel.track('view_bo_stat_mileage',{'site_code':SITE_CODE});
+
+                    // 조회 클릭
+                    $('.section-body').on('click', '#mileageSearchForm-submit', function (e) {
+                        mixpanel.track('search_bo_stat_mileage', {
+	                        'site_code':SITE_CODE,
+                            'type': $('#viewMode').val(),
+                            'start': $('[name="start_date"]').val(),
+                            'end': $('[name="end_date"]').val()
+                        });
+                    });
+                    break;
+                // 통계 > 매출 통계
+                case '/admin/stat/shopping':
+                    // 매출 통계 보기
+                    mixpanel.track('view_bo_stat_shopping',{'site_code':SITE_CODE});
+
+                    $('.section-body').on('click', '.search-type a', function (e) {
+                        // 조회 타입별 보기 클릭
+                        mixpanel.track('click_bo_stat_shopping_view_type', {
+	                        'site_code':SITE_CODE,
+                            'type': $(e.currentTarget).text()
+                        });
+                    }).on('click', '#filterWrap', function (e) {
+                        // 필터 클릭
+                        mixpanel.track('click_bo_stat_shopping_filter',{'site_code':SITE_CODE});
+                    });
+
+                    // 필터 적용
+                    $('#filterTypeWrap').on('click', '.btn-submit', function (e) {
+                        mixpanel.track('save_bo_stat_shopping_filter', {
+	                        'site_code':SITE_CODE,
+                            'payment_method': $('[name="filter_pay_type[]"]').val(),
+                            'device': $('[name="filter_order_channel"]:checked').val(),
+                            'product': $('[name="filter_prod_code[][]"]').val(),
+                            'consumer_id': $('[name="filter_orderer_id"]').val()
+                        });
+                    });
+                    break;
+                // 통계 > 컨텐츠 반응
+                case '/admin/stat/feedback':
+                    // 컨텐츠 반응 보기
+                    mixpanel.track('view_bo_stat_feedback',{'site_code':SITE_CODE});
+                    break;
+                // 통계 > 방문자 통계
+                case '/admin/stat/visitor':
+                    // 방문자 통계 보기
+                    mixpanel.track('view_bo_stat_visitor',{'site_code':SITE_CODE});
+
+                    // 조회 타입별 보기 클릭
+                    $('.section-body').on('change', '#year_month_stats', function (e) {
+                        mixpanel.track('click_bo_stat_visitor_view_type', {
+	                        'site_code':SITE_CODE,
+                            'type': $(e.currentTarget).val()
+                        });
+                    });
+                    break;
+                // 통계 > 유입 사이트
+                case '/admin/stat/site':
+                    // 유입 사이트 보기
+                    mixpanel.track('view_bo_stat_referer',{'site_code':SITE_CODE});
+
+                    // 조회 타입별 보기 클릭
+                    $('.section-body').on('change', '#search-type', function (e) {
+                        mixpanel.track('click_bo_stat_referer_view_type', {
+	                        'site_code':SITE_CODE,
+                            'type': $(e.currentTarget).val()
+                        });
+                    });
+
+                    // 내보내기 클릭
+                    $('.card').on('click', '.btn-download-daily', function (e) {
+                        mixpanel.track('click_bo_stat_referer_domain_daily_export',{'site_code':SITE_CODE});
+                    }).on('click', '.btn-download', function (e) {
+                        mixpanel.track('click_bo_stat_referer_domain_export',{'site_code':SITE_CODE});
+                    }).on('click', '.btn-url-download-daily', function (e) {
+                        mixpanel.track('click_bo_stat_referer_url_daily_export',{'site_code':SITE_CODE});
+                    }).on('click', '.btn-url-download', function (e) {
+                        mixpanel.track('click_bo_stat_referer_url_export',{'site_code':SITE_CODE});
+                    });
+                    break;
+                // 통계 > 유입 검색어
+                case '/admin/stat/keyword':
+                    // 유입 검색어 보기
+                    mixpanel.track('view_bo_stat_keyword',{'site_code':SITE_CODE});
+
+                    // 조회 타입별 보기 클릭
+                    $('.section-body').on('change', '#search-type', function (e) {
+                        mixpanel.track('click_bo_stat_referer_view_type', {
+	                        'site_code':SITE_CODE,
+                            'type': $(e.currentTarget).val()
+                        });
+                    });
+                    break;
+                // 통계 > 많이 방문한 페이지
+                case '/admin/stat/page':
+                    // 많이 방문한 페이지 보기
+                    mixpanel.track('view_bo_stat_page',{'site_code':SITE_CODE});
+
+                    // 조회 타입별 보기 클릭
+                    $('.section-body').on('change', '#search-type', function (e) {
+                        mixpanel.track('click_bo_stat_page_view_type', {
+	                        'site_code':SITE_CODE,
+                            'type': $(e.currentTarget).val()
+                        });
+                    });
+                    break;
+                // 통계 > 저장공간
+                case '/admin/stat/storage':
+                    // 저장공간 보기
+                    mixpanel.track('view_bo_stat_storage',{'site_code':SITE_CODE});
+                    break;
+                // 통계 > 트래픽
+                case '/admin/stat/traffic':
+                    // 트래픽 보기
+                    mixpanel.track('view_bo_stat_traffic',{'site_code':SITE_CODE});
+                    break;
+                // 통계 > 부가 서비스
+                case '/admin/stat/additional_service':
+                    // 트래픽 보기
+                    mixpanel.track('view_bo_stat_external',{'site_code':SITE_CODE});
+                    break;
+                // 통계 > 라플라스 애널리틱스
+                case '/admin/stat/laplace_analytics':
+                    // 라플라스 애널리틱스 보기
+                    mixpanel.track('view_bo_stat_laplace',{'site_code':SITE_CODE});
+
+                    // 서비스 신청버튼 클릭
+                    $('.top_header').on('click', '.btn-laplace', function (e) {
+                        mixpanel.track('click_bo_stat_laplace_apply',{'site_code':SITE_CODE});
+                    });
+
+                    // 서비스 신청버튼 클릭
+                    $('#stat_laplace').on('click', 'a', function (e) {
+                        mixpanel.track('click_bo_stat_laplace_apply',{'site_code':SITE_CODE});
+                    });
+                    break;
+				// 통계 > 에이스 카운터
+	            case '/admin/stat/ace_counter':
+					//에이스 카운터 보기
+		            mixpanel.track('view_bo_stat_ace_counter',{'site_code':SITE_CODE});
+
+					// 서비스 신청 버튼 클릭
+		            $('[data-mixpanel="click_bo_stat_ace_counter_apply"]').on('click', function (e) {
+			            mixpanel.track('click_bo_stat_ace_counter_apply', {
+				            'site_code':SITE_CODE
+			            });
+		            });
+		            break;
+	            // 디자인 모드
+                case '/admin/design':
+                    // 디자인모드 보기
+                    mixpanel.track('view_dm',{'site_code':SITE_CODE});
+
+                    // 버튼 클릭
+                    $('body').on('click', '#menu_list_btn', function () {
+                        // 메뉴 관리 클릭(좌측 상단)
+                        mixpanel.track('click_dm_menu_left_top',{'site_code':SITE_CODE});
+                    }).on('click', '._publish', function () {
+                        // 게시하기 클릭
+                        mixpanel.track('click_dm_publish',{'site_code':SITE_CODE});
+                    }).on('click', '._leave', function () {
+                        // 나가기 클릭
+                        mixpanel.track('click_dm_leave',{'site_code':SITE_CODE});
+                    }).on('click', '#reset_design_temp', function () {
+                        // 복구하기 클릭
+                        mixpanel.track('click_dm_undo',{'site_code':SITE_CODE});
+                    }).on('click', '._preview', function () {
+                        // 미리보기 클릭
+                        mixpanel.track('click_dm_preview',{'site_code':SITE_CODE});
+                    }).on('click', '#design_setting_btn2', function () {
+                        // 공통 디자인 설정 클릭
+                        mixpanel.track('click_dm_settings',{'site_code':SITE_CODE});
+                    }).on('click', '._empty_section span', function () {
+                        // 위젯 추가 클릭
+                        mixpanel.track('click_dm_add_widget', {
+	                        'site_code':SITE_CODE,
+                            'source': 'body'
+                        });
+                    }).on('click', '._widget_add', function () {
+                        // 위젯 추가 클릭
+                        mixpanel.track('click_dm_add_widget', {
+	                        'site_code':SITE_CODE,
+                            'source': 'left_nav'
+                        });
+                    }).on('click', '._section_add', function () {
+                        // 섹션 추가 클릭
+                        mixpanel.track('click_dm_add_section', {
+	                        'site_code':SITE_CODE,
+                            'source': 'left_nav'
+                        });
+                    }).on('click', '._empty._item', function () {
+                        // 섹션 추가 클릭
+                        mixpanel.track('click_dm_add_section', {
+	                        'site_code':SITE_CODE,
+                            'source': 'body'
+                        });
+                    }).on('click', '._menu_info', function () {
+                        // 메뉴 설정 클릭
+                        mixpanel.track('click_dm_menu_settings', {
+	                        'site_code':SITE_CODE,
+                            'source': 'top'
+                        });
+                    }).on('click', '#design_help_on', function () {
+                        // 도움말 클릭 (우측 하단));
+                        mixpanel.track('click_dm_help',{'site_code':SITE_CODE});
+                    }).on('click', '#main_menu_add, #foot_menu_add', function () {
+                        // 메뉴 추가 버튼 클릭 (메뉴설정 내)
+                        mixpanel.track('click_dm_add_page',{'site_code':SITE_CODE});
+                    });
+
+                    // 메뉴설정 내 글로벌 메뉴 클릭
+                    $('._global_menu_container ._sel').on('click', function (e) {
+                        mixpanel.track('click_dm_global_menu', {
+	                        'site_code':SITE_CODE,
+                            'type': $(e.currentTarget).data('url')
+                        });
+                    });
+
+                    // 디바이스 아이콘 클릭
+                    $('#device_type').on('click', function () {
+                        mixpanel.track('click_dm_device_button',{'site_code':SITE_CODE});
+                    });
+                    break;
+								// 환경설정 > 소셜 로그인 · 지도 · 공유
+	              case '/admin/config/oauth':
+										// 소셜 로그인 · 지도 · 공유 조회
+										mixpanel.track('view_bo_social_map_share', {
+												site_code: SITE_CODE,
+										});
+										break;
+                default:
+                    break;
+            }
+        };
+    }
+};
+
+/**
+ * benefit_type에 따른 offer_type 텍스트 반환
+ * @param {string} benefit_type - 혜택 유형 (discount, delivery, fix_price)
+ * @returns {string} offer_type 텍스트
+ */
+function getOfferTypeFromBenefitType(benefit_type) {
+    switch(benefit_type) {
+        case 'delivery':
+            return 'free shipping';
+        case 'fix_price':
+            return 'fixed price purchase';
+        case 'discount':
+        default:
+            return 'discount purchase price';
+    }
+}

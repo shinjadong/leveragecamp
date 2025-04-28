@@ -1,0 +1,2303 @@
+var COUPON = function(){
+	var $coupon_add_form;
+	var header_ctl;
+	var $content;
+	var $coupon_issue_list = '';
+	var is_modify = false;
+	var type_group_code_list = [];
+	var apply_type_category_list = [];
+	var select_group_name = '';
+	var select_group_code = '';
+	var current_base_url = '';
+	var current_page = 1;
+	var prev_search_get_issue_list_type_and_text = '';
+	var old_data = {
+		apply_sale_percent : '',
+		apply_sale_price : '',
+		apply_sale_type : 'price',
+		apply_sale_type_minimum_price : '',
+		apply_sale_type_max_price : '',
+		apply_type : '',
+		apply_type_category_list : '',
+		indeterminate_category_list : '',
+		apply_type_product_list : '',
+		apply_excluded_product_list : '',
+		code : '',
+		create_date : '',
+		currency : '',
+		end_date : '',
+		is_limit : '',
+		is_overlap : '',
+		is_unlimited_date : '',
+		limit_count : '',
+		is_duplication : '',
+		is_alarm : true,
+		duration_type : 'none',
+		menu_type : '',
+		name : '',
+		start_date : '',
+		type : 'targeted',
+		type_coupon_code : '',
+		type_coupon_create_count : '',
+		type_group_code : '',
+		type_is_mult_coupon : '',
+		type_target : 'all',
+		unit_code : '',
+		member_limit_count : '',
+		is_delivery : '',
+		use_guest : '',
+		auto_data : '',
+	};
+	var group_count = 0;
+	var category_count = 0;
+	var $group_name = '';
+	var $product_search_input;
+	var $product_search_btn;
+	var $product_search_list;
+	// var $product_except_search_btn;
+	var product_list = [];
+	var product_list_data = [];
+	var excluded_product_list = [];
+	var excluded_product_list_data = [];
+	var $product_add_btn;
+	var $product_more_btn;
+	var $product_apply_list;
+	var $excluded_product_list;
+	var $issue_search_btn;
+	var $issue_search_type;
+	var $issue_search_input;
+	var page = 1;
+	var init = function(){
+		$content = $('#content');
+	};
+	var is_submit = false;
+	var is_issue_list_loading = false;
+	var is_coupon_setting_open = false;
+
+	//쿠폰 리스트 페이지 기본설정
+	var listInit = function(base_url, callback){
+		current_base_url = base_url;
+		var $coupon_list_table = $('#coupon_list_table');
+		$content.find('._check_list:checked').prop('checked', false);
+
+		$content.find('._check_list').change(function(){
+			var check_list = $content.find('._check_list:checked');
+			var check_list_length = check_list.length;
+			$content.find('._check_list_count').text(check_list_length);
+			var _flag, _coupon_type;
+			if(check_list_length === 1){
+				check_list.each(function(){
+					_flag = $(this).attr('data-issue-flag');
+					_coupon_type = $(this).attr('data-coupon-type');
+					if(_coupon_type === 'auto'){
+						if(_flag === 'Y'){
+							$content.find('._issue_flag_btn').text(getLocalizeString('설명_발행중지', '', '발행중지'));
+						}else{
+							$content.find('._issue_flag_btn').text(getLocalizeString('설명_발행재개', '', '발행재개'));
+						}
+					}
+				});
+
+				$content.find('._edit_btn').show();
+				$content.find('._issue_list_btn').show();
+				$content.find('#_copy_coupon_info_list_btn').show();
+				if(_coupon_type === 'auto'){
+					$content.find('._issue_flag_btn').show();
+				}else{
+					$content.find('._issue_flag_btn').hide();
+				}
+			}else{
+				$content.find('._edit_btn').hide();
+				$content.find('._issue_list_btn').hide();
+				$content.find('._issue_flag_btn').hide();
+				$content.find('#_copy_coupon_info_list_btn').hide();
+			}
+
+			// 전체 체크박스 업데이트
+			const isItemsChecked = Boolean(check_list_length);
+
+			$content.find('._all_check').prop('checked', isItemsChecked);
+
+			if(!isItemsChecked){
+				hideDeleteBtn();
+			}
+		});
+
+		//체크박스 전체체크 설정 및 삭제버튼 표시 이벤트 설정
+		$content.find('input[type=\'checkbox\']').off('click.coupon_list_table').on('click.coupon_list_table', function(){
+			if($(this).hasClass('_all_check')){
+				$content.find('input[type=\'checkbox\']').prop('checked', $(this).prop('checked'));
+			}
+
+			if($coupon_list_table.find('input[type=\'checkbox\']:checked').length > 0){
+				var check_list = $content.find('._check_list:checked');
+				$content.find('._check_list_count').text(check_list.length);
+				var _flag, _coupon_type;
+				if(check_list.length === 1){
+					check_list.each(function(){
+						_flag = $(this).attr('data-issue-flag');
+						_coupon_type = $(this).attr('data-coupon-type');
+						if(_coupon_type === 'auto'){
+							if(_flag === 'Y'){
+								$content.find('._issue_flag_btn').text(getLocalizeString('설명_발행중지', '', '발행중지'));
+							}else{
+								$content.find('._issue_flag_btn').text(getLocalizeString('설명_발행재개', '', '발행재개'));
+							}
+						}
+					});
+					$content.find('._edit_btn').show();
+					$content.find('._issue_list_btn').show();
+					$content.find('#_copy_coupon_info_list_btn').show();
+					if(_coupon_type === 'AUTO'){
+						$content.find('._issue_flag_btn').show();
+					}else{
+						$content.find('._issue_flag_btn').hide();
+					}
+				}else{
+					$content.find('._edit_btn').hide();
+					$content.find('._issue_list_btn').hide();
+					$content.find('._issue_flag_btn').hide();
+					$content.find('#_copy_coupon_info_list_btn').hide();
+				}
+				showDeleteBtn();
+			}else{
+				hideDeleteBtn();
+			}
+		});
+
+		$content.find('._issue_fla_btn').off('click._issue_fla_btn').on('click._issue_fla_btn', function(){
+			updateCouponIssueFlag($(this).data('code'), $(this).data('flag'));
+		});
+
+		$content.find('._delete_btn').off('click._delete_btn').on('click._delete_btn', function(){
+			deleteCoupon($(this).data('code'));
+		});
+		$content.find('._edit_btn').off('click._edit_btn').on('click._edit_btn', function(){
+			var code;
+			$content.find('._check_list:checked').each(function(){
+				code = $(this).val();
+			});
+			window.location.href = current_base_url + '&mode=add&code=' + code;
+		});
+		$content.find('#_copy_coupon_info_list_btn').off('click.#_copy_coupon_info_list_btn').on('click.#_copy_coupon_info_list_btn', function(){
+			let code;
+			$content.find('._check_list:checked').each(function(){
+				code = $(this).val();
+			});
+			window.location.href = current_base_url + '&mode=add&copy_coupon_code=' + code;
+		});
+		$content.find('._copy_coupon_info_btn').off('click._copy_coupon_info_btn').on('click._copy_coupon_info_btn', function(){
+			window.location.href = current_base_url + '&mode=add&copy_coupon_code=' + $(this).data('code');
+		});
+		$content.find('._issue_list_btn').off('click._issue_list_btn').on('click._issue_list_btn', function(){
+			var code;
+			$content.find('._check_list:checked').each(function(){
+				code = $(this).val();
+			});
+			if(code != ''){
+				openIssueDialog(code, callback);
+			}
+		});
+		$content.find('._issue_flag_btn').off('click._issue_flag_btn').on('click._issue_flag_btn', function(){
+			var _flag;
+			if($content.find('._check_list:checked').length === 1){
+				$content.find('._check_list:checked').each(function(){
+					_flag = $(this).attr('data-issue-flag');
+					//발행중 -> 발행중지처리 | 발행중지 -> 발행중 처리
+					if(_flag === 'Y'){
+						_flag = 'N';
+					}else{
+						_flag = 'Y';
+					}
+				});
+			}else{
+				return false;
+			}
+			var code;
+			$content.find('._check_list:checked').each(function(){
+				code = $(this).val();
+			});
+			updateCouponIssueFlag(code, _flag);
+		});
+		$content.find('._coupon_search').off('keyup._coupon_search').on('keyup._coupon_search', function(e){
+			if(e.keyCode == 13){
+				startKeywordSearch();
+			}
+		});
+		$content.find('._coupon_search_btn').off('click._coupon_search_btn').on('click._coupon_search_btn', function(e){
+			startKeywordSearch();
+		});
+
+		$content.find('._issue_btn').off('click._issue_btn').on('click._issue_btn', function(){
+			var code = $(this).data('code');
+			if(code != ''){
+				openIssueDialog(code, callback);
+			}
+		});
+
+		$content.find('._modify_btn').off('click._modify_btn').on('click._modify_btn', function(){
+			window.location.href = current_base_url + '&mode=add&code=' + $(this).data('code');
+		});
+	};
+
+	//쿠폰 추가페이지 기본설정
+	var addInit = function(data, _product_list_data, _excluded_product_list_data, is_copy_mode = false){
+		$content.find('input[name=\'apply_sale_price\']').off('blur').on('blur', function(){
+			var value = parseFloat($(this).val().replace(/,/g, ''));
+			if (value < 0 || isNaN(value)) {
+				$(this).val(0);
+			}
+			set_money_format($content.find('input[name=\'apply_sale_price\']'));
+		});
+
+		$content.find('input[name=\'apply_sale_type_minimum_price\']').off('blur').on('blur', function(){
+			set_money_format($content.find('input[name=\'apply_sale_type_minimum_price\']'));
+		});
+
+		$content.find('input[name=\'apply_sale_type_max_price\']').off('blur').on('blur', function(){
+			set_money_format($content.find('input[name=\'apply_sale_type_max_price\']'));
+		});
+
+		//사용혜택 이벤트 설정
+		var $benefit_type = $content.find('select[name=benefit_type]');
+		$benefit_type.off('change').on('change', function(){
+			var selected_type = $(this).val();
+			var is_delivery = selected_type === 'delivery';
+			var is_fix_price = selected_type === 'fix_price';
+			
+			// 최대 할인 금액 표시 설정
+			$content.find('._apply_sale_type_max_price').css({
+				'display' : (is_delivery) ? 'block' : 'none',
+			});
+			
+			var $sale_wrap = $content.find('._sale_wrap');
+			$sale_wrap.removeClass('display-none');
+			
+			if(is_delivery){
+				// 배송비 무료일 경우 금액 입력 숨김
+				$sale_wrap.addClass('display-none');
+			} else {
+				$sale_wrap.removeClass('display-none');
+				if(is_fix_price) {
+					// 지정금액 혜택일 경우 % 옵션 숨김, 금액으로 고정
+					$content.find('#sale_amount_type_percent').css({'display' : 'none'});
+					$content.find('#sale_amount_type_percent').prop('disabled', true).prop('hidden', true);
+				} else {
+					// 금액 할인일 경우 % 옵션 표시, 선택 가능하게 함
+					$content.find('#sale_amount_type_percent').css({'display' : 'block'});
+					$content.find('#sale_amount_type_percent').prop('disabled', false).prop('hidden', false);
+				}
+			}
+		});
+		// 쿠폰 복제화면에서 지정금액 혜택일 경우 % 옵션 숨김, 금액으로 고정
+		if (is_copy_mode && $benefit_type.val() === 'fix_price') {
+			$content.find('#sale_amount_type_percent').css({'display' : 'none'});
+			$content.find('#sale_amount_type_percent').prop('disabled', true).prop('hidden', true);
+		}
+
+
+		//그룹선택 이벤트 설정
+		$group_name = $content.find('._group_name');
+		$product_apply_list = $content.find('._product_apply_list');
+		$excluded_product_list = $content.find('._excluded_product_list');
+		var _old_data = JSON.parse(data);
+		if(!isBlank(_old_data)){
+			$.each(old_data, function(k, v){
+				old_data[k] = _old_data[k];
+			});
+			type_group_code_list = old_data.type_group_code;
+			apply_type_category_list = old_data.apply_type_category_list;
+			indeterminate_category_list = old_data.indeterminate_category_list;
+			product_list = old_data.apply_type_product_list;
+			excluded_product_list = old_data.apply_excluded_product_list;
+			is_modify = is_copy_mode === true ? false : true;
+		}
+		if(apply_type_category_list.length > 0){
+			$.each(apply_type_category_list, (_, v) => {
+				if(indeterminate_category_list.includes(v)){
+					$(`input[data-code=${v}]`).prop('indeterminate', true);
+				}else{
+					$(`input[data-code=${v}]`).prop('checked', true);
+				}
+			});
+			if(indeterminate_category_list.length === 0){
+				const nodes = $('.second_parent_list input[class^=\'_coupon_checkbox-\']:checked');
+				const isRoot = nodes.eq(0).data('root') ? nodes.eq(0).data('root') : '';
+				const parent_code = !isRoot ? nodes.eq(0).data('parent') : nodes.eq(0).data('root');
+				const child_nodes = $('input[data-parent=\'' + parent_code + '\']');
+				const checked_child_nodes = $('input[data-parent=\'' + parent_code + '\']:checked');
+				if(child_nodes.length === checked_child_nodes.length){
+					$(`input[data-code=${parent_code}]`).prop('checked', true);
+				}else{
+					$(`input[data-code=${parent_code}]`).prop('indeterminate', true);
+				}
+			}
+		}
+		;
+		if(!isBlank(_product_list_data)){
+			product_list_data = JSON.parse(_product_list_data);
+		}
+		if(!isBlank(_excluded_product_list_data)){
+			excluded_product_list_data = JSON.parse(_excluded_product_list_data);
+		}
+
+		if(is_modify || is_copy_mode){
+			var $sale_wrap = $content.find('._sale_wrap');
+			$sale_wrap.removeClass('display-none');
+			
+			// benefit_type 설정
+			var benefitType = 'discount';
+			if(old_data.is_delivery === true) {
+				benefitType = 'delivery';
+				$content.find('._apply_sale_type_max_price').removeClass('display-none');
+				$sale_wrap.addClass('display-none');
+			} else if(old_data.apply_sale_type === 'fix_price') {
+				benefitType = 'fix_price';
+				$content.find('._apply_sale_type_max_price').removeClass('display-none');
+				$content.find('._sale_amount_type').addClass('display-none');
+				
+				// FIX_PRICE 타입일 경우 자동으로 APPLY_TYPE_PRODUCT 선택
+				if(!is_modify) {
+					$content.find('select[name=apply_type]').val('product').trigger('change');
+					$content.find('select[name=apply_type]').prop('disabled', true);
+				}
+				// 체크박스 해제
+				$content.find('input[name="is_overlap"]').prop('checked', false);
+				// 추가할인가능 옵션 체크박스 변경불가
+				$content.find('input[name="is_overlap"]').prop('disabled', true);
+			} else {
+				$sale_wrap.removeClass('display-none');
+				$content.find('._apply_sale_type_max_price').addClass('display-none');
+				
+				// 추가할인가능 옵션 체크박스 변경가능
+				$content.find('input[name="is_overlap"]').prop('disabled', false);
+			}
+			
+			$content.find('select[name=benefit_type]').val(benefitType);
+		}
+
+		//쿠폰명 기본값 설정
+		$content.find('input[name=name]').val(old_data.name);
+		$content.find('input[name=name]').off('blur.name').on('blur.name', function(){
+			var option = {max_byte : 80};
+			$(this).limitLength(option);
+		});
+
+		//쿠폰 적용형식 이벤트 설정
+		$content.find('select[name=apply_type]').off('change.apply_type').on('change.apply_type', function(){
+			if(is_modify){
+				$content.find('select[name=apply_type]').val(old_data.apply_type);
+				alert(getLocalizeString('설명_쿠폰정보수정시쿠폰형식변경불가', '', '쿠폰정보 수정시에는 쿠폰형식을 변경할 수 없습니다.'));
+				return false;
+			}
+			setLayoutByCouponApplyType($(this).val());
+		});
+
+		//혜택 타입 변경 이벤트 설정
+		$content.find('select[name=benefit_type]').off('change.benefit_type').on('change.benefit_type', function(){
+			var benefit_type = $(this).val();
+			
+			// FIX_PRICE 혜택 선택 시 자동으로 APPLY_TYPE_PRODUCT 선택
+			if(benefit_type === 'fix_price') {
+				$content.find('select[name=apply_type]').val('product').trigger('change');
+				$content.find('select[name=apply_type]').prop('disabled', true);
+				
+				// 체크박스 해제
+				$content.find('input[name="is_overlap"]').prop('checked', false);
+				// 추가할인가능 옵션 체크박스 변경불가
+				$content.find('input[name="is_overlap"]').prop('disabled', true);
+				
+				// % 옵션 숨김
+				$content.find('#sale_amount_type_percent').css({'display' : 'none'});
+				$content.find('#sale_amount_type_percent').prop('disabled', true).prop('hidden', true);
+				// KRW 옵션 강제 선택
+				$content.find('._sale_amount_type').val('price');
+				
+				// 최대할인금액 숨김
+				$content.find('._apply_sale_type_max_price').css({'display' : 'none'});
+			} else {
+				// 다른 혜택 타입 선택 시 apply_type 선택 제한 해제
+				$content.find('select[name=apply_type]').off('change.fix_price');
+				$content.find('select[name=apply_type]').prop('disabled', false);
+				
+				// 추가할인가능 옵션 체크박스 변경가능
+				$content.find('input[name="is_overlap"]').prop('disabled', false);
+				
+				// % 옵션 표시
+				$content.find('#sale_amount_type_percent').css({'display' : 'block'});
+				$content.find('#sale_amount_type_percent').prop('disabled', false).prop('hidden', false);
+			}
+			
+			setLayoutByApplySaleType(benefit_type);
+		});
+
+		//쿠폰형식 이벤트 설정
+		$content.find('input[name=type]').off('change.apply_sale_type').on('change.apply_sale_type', function(){
+			if(is_modify){
+				alert(getLocalizeString('설명_쿠폰정보수정시쿠폰형식변경불가', '', '쿠폰정보 수정시에는 쿠폰형식을 변경할 수 없습니다.'));
+				$content.find('input[name=type]:radio[value=\'' + old_data.type + '\']').prop('checked', true);
+				return false;
+			}else{
+				setLayoutByCouponType($(this).val());
+			}
+		});
+
+		if(is_modify){
+			$content.find('input[name=\'is_limit\']').change(function(){
+				alert(getLocalizeString('설명_쿠폰정보수정시에는쿠폰수제한을변경', '', '쿠폰정보 수정시에는 쿠폰 수 제한을 변경할 수 없습니다.'));
+				if(old_data.is_limit){
+					$(this).prop('checked', false);
+				}else{
+					$(this).prop('checked', true);
+				}
+			});
+			$content.find('input[name=\'is_duplication\']').change(function(){
+				alert(getLocalizeString('설명_쿠폰정보수정시에는중복사용', '', '쿠폰정보 수정시에는 중복 사용 가능 수정이 변경이 불가합니다.'));
+				if(old_data.is_duplication){
+					$(this).prop('checked', true);
+				}else{
+					$(this).prop('checked', false);
+				}
+			});
+		}
+
+		//쿠폰형식 기본값 설정
+		$content.find('._check_drop_group_list li a').off('click._check_drop_group_list').on('click._check_drop_group_list', function(){
+			if(is_modify){
+				alert(getLocalizeString('설명_쿠폰정보수정시적용그룹변경불가', '', '쿠폰정보 수정시에는 적용그룹을 변경할 수 없습니다.'));
+				return false;
+			}
+			var group_code = $(this).data('code');
+			group_count = 0;
+
+			if($(this).parent().hasClass('active')){
+				deleteArrayValue(type_group_code_list, group_code);
+			}else{
+				setGroupSelect(group_code);
+			}
+		});
+		if(old_data.type_target === 'group' || old_data.type_target === 'crm' || old_data.type_target === 'grade_change'){
+			$.each(type_group_code_list, function(i, code){
+				const $_check_drop_group_list_item = $content.find('._check_drop_group_list li a[data-code=\'' + code + '\']');
+
+				$_check_drop_group_list_item.prop('checked', true);
+				$_check_drop_group_list_item.parent().addClass('selected');
+			});
+			setGroupSelect();
+		}
+
+		$content.find('[class^=\'_coupon_checkbox-\']').on('change', function(e){
+			let this_checkbox = $(this);
+			const className = this_checkbox.attr('class');
+			const checked = $(`[class="${className}"]`).is(':checked');
+			$(`[class^="${className}"]`).prop('checked', checked);
+			checkBoxChecked(className, checked);
+
+			var category_code = $(this).data('code');
+			var parent_code = isBlank($(this).data('parent')) ? '' : $(this).data('parent');
+			category_count = 0;
+			if($(this).is(':checked')){
+				if(!isBlank($(this).data('root')) && parent_code !== ''){
+					setCategory(category_code, 'descendant', parent_code);
+				}
+				if(isBlank($(this).data('root')) && parent_code !== '' && category_code !== ''){
+					setCategory(category_code, 'middle', parent_code);
+				}
+				if(parent_code == '' && category_code !== ''){
+					setCategory(category_code, 'root');
+				}
+			}else{
+				deleteArrayValue(apply_type_category_list, category_code);
+				if(parent_code !== '' && !isBlank($(this).data('root'))){
+					delCategory(category_code, 'descendant', parent_code);
+				}
+				if(category_code !== ''){
+					delCategory(category_code, 'child');
+				}
+			}
+
+			setCategorySelect();
+			header_ctl.change();
+		});
+
+		$content.find('._product_search_btn').off('click._product_search_btn').on('click._product_search_btn', function(){
+			openProductSearchDialog('apply');
+		});
+		setProductList('product');
+
+		$content.find('._excluded_product_search_btn').off('click._excluded_product_search_btn').on('click._excluded_product_search_btn', function(){
+			openProductSearchDialog('excluded');
+		});
+		setProductList('excluded_product');
+
+
+		if(old_data.apply_type === 'category'){
+			setCategorySelect();
+		}
+
+		function checkBoxChecked(className, checked){
+			if(className.indexOf('-') === -1){
+				return;
+			}
+			const Parent_className = className.substr(0, className.lastIndexOf('-'));
+			const Sibling_className = className.substr(0, (
+					className.lastIndexOf('-') + 1
+			));
+			const Parent_Element = $('.' + Parent_className);
+			//체크일때
+			if(checked){
+				const Node = $('input:checkbox:regex(class,' + Sibling_className + '[0-9]$)');
+				if(Node.length === Node.filter(':checked').length){
+					Parent_Element.prop({checked : true, indeterminate : false});
+				}else if(Node.filter(':checked').length < Node.length){
+					Parent_Element.prop({checked : false, indeterminate : true});
+				}else if(Node.filter(':checked').length === 0){
+					Parent_Element.prop({checked : false, indeterminate : false});
+				}
+			}else{ //해제일때
+				$(`[class^='${className}']`).each(function(){
+					const Node = $('input:checkbox:regex(class,' + Sibling_className + '[0-9]$)');
+					const Parent_className = className.substr(0, className.lastIndexOf('-'));
+					let is_checked = $(this).is(':checked');
+					let is_indeterminate = Node.filter(function(){
+						return this.indeterminate;
+					}).length;
+					if(!is_checked && Parent_className !== '_coupon_checkbox'){
+						if(Node.filter(':checked').length === 0 && is_indeterminate === 0){
+							Parent_Element.prop({checked : false, indeterminate : false});
+							Node.prop({checked : false, indeterminate : false});
+						}else{
+							Parent_Element.prop({checked : false, indeterminate : true});
+						}
+					}
+					return true;
+				});
+			}
+			checkBoxChecked(Parent_className, checked);
+		}
+
+		jQuery.expr[':'].regex = function(elem, index, match){
+			let matchParams = match[3].split(','),
+					validLabels = /^(data|css):/,
+					attr = {
+						method : matchParams[0].match(validLabels) ?
+								matchParams[0].split(':')[0] : 'attr',
+						property : matchParams.shift().replace(validLabels, ''),
+					},
+					regexFlags = 'ig',
+					regex = new RegExp(matchParams.join('').replace(/^\s+|\s+$/g, ''), regexFlags);
+			return regex.test(jQuery(elem)[attr.method](attr.property));
+		};
+
+		//시작일 및 종료일 데이트 피커 설정
+		var date_option = {
+			dayViewHeaderFormat : 'YYYY MMMM',
+			locale : getMomentLangCode(ADMIN_LANG_CODE),
+			icons : {
+				time : 'zmdi zmdi-time',
+				date : 'zmdi zmdi-calendar',
+				up : 'zmdi zmdi-chevron-up',
+				down : 'zmdi zmdi-chevron-down',
+				previous : 'zmdi zmdi-chevron-left',
+				next : 'zmdi zmdi-chevron-right',
+				today : 'glyphicon glyphicon-screenshot',
+				clear : 'glyphicon glyphicon-trash',
+			},
+			format : 'YYYY/MM/DD HH:mm',
+			widgetPositioning : {
+				vertical : 'top',
+			},
+		};
+		var $start_date = $content.find('input[name=\'start_date\']');
+		var $end_date = $content.find('input[name=\'end_date\']');
+
+		if(is_modify){
+			if(old_data.start_date == '' || old_data.start_date == '0000-00-00 00:00:00'){
+				date_option['defaultDate'] = new Date();
+			}else{
+				date_option['defaultDate'] = old_data.start_date;
+			}
+		}else{
+			date_option['defaultDate'] = new Date();
+		}
+
+
+		$start_date.datetimepicker(date_option).on('dp.change', function(e){
+			$end_date.data('DateTimePicker').minDate(e.date);
+			header_ctl.change();
+		});
+
+
+		if(is_modify){
+			if(old_data.end_date == '' || old_data.end_date == '0000-00-00 00:00:00' || old_data.end_date == null){
+				date_option['defaultDate'] = $start_date.data('DateTimePicker').date().add('+7', 'days').set({'hour' : 23, 'minute' : 59});
+			}else{
+				date_option['defaultDate'] = old_data.end_date;
+			}
+		}else{
+			date_option['defaultDate'] = $start_date.data('DateTimePicker').date().add('+7', 'days').set({'hour' : 23, 'minute' : 59});
+		}
+
+		$end_date.datetimepicker(date_option).on('dp.change', function(e){
+			if(typeof header_ctl != 'undefined'){
+				header_ctl.change();
+			}
+		});
+		if(is_modify){
+			if(old_data.is_unlimited_date){
+				var $icon_last = $('._icon_last');
+				$end_date.data('DateTimePicker').disable();
+				if(old_data.start_date == '' || old_data.start_date == '0000-00-00 00:00:00'){
+					$end_date.data('DateTimePicker').minDate($start_date.data('DateTimePicker').date());
+				}else{
+					$end_date.data('DateTimePicker').minDate(old_data.start_date);
+				}
+				$icon_last.css({'color' : '#bdbdbd'});
+			}else{
+				if(old_data.start_date == '' || old_data.start_date == '0000-00-00 00:00:00'){
+					$end_date.data('DateTimePicker').minDate($start_date.data('DateTimePicker').date());
+				}else{
+					$end_date.data('DateTimePicker').minDate(old_data.start_date);
+				}
+			}
+		}else{
+			$end_date.data('DateTimePicker').minDate($start_date.data('DateTimePicker').date());
+		}
+
+		// (자동발행 - 쇼핑등급 변경) 복제모드일 때 쇼핑등급 미사용그룹 대상이면 미사용그룹 목록을 보여주도록 설정
+		if(is_copy_mode && old_data.type_target === 'grade_change' && old_data.auto_data['use_auto_change_group'] === 'N') {
+			$content.find('._auto_group_item').hide();
+			$content.find('._manual_group_item').show();
+		}
+
+		//시작일 및 종료일 이벤트 설정
+		$content.find('input[name=\'is_unlimited_date\']').change(function(){
+			var $icon_last = $('._icon_last');
+			if($(this).prop('checked')){
+				$end_date.data('DateTimePicker').disable();
+				$icon_last.css({'color' : '#bdbdbd'});
+			}else{
+				$icon_last.css({'color' : '#0c0c0c'});
+				if(!is_modify){
+					$end_date.datetimepicker(date_option);
+					$end_date.val($end_date.data('DateTimePicker').date()._i);
+					$end_date.data('DateTimePicker').enable();
+				}
+			}
+		});
+
+		$content.find('input[name="auto_data_day_limit"]').off('focusout').on('focusout', function(){
+			if($(this).val() < 1){
+				alert('최소 1일부터 최대 365일까지 입력 가능합니다.');
+				$(this).val(1);
+			}
+			if($(this).val() > 365){
+				alert('최소 1일부터 최대 365일까지 입력 가능합니다.');
+				$(this).val(365);
+			}
+		});
+
+		$content.find('input[name=\'is_unlimited_date\']').prop('checked', old_data.is_unlimited_date);
+		$content.find('input[name=\'is_unlimited_date\']').prop('checked') ? $end_date.data('DateTimePicker').disable() : $end_date.data('DateTimePicker').enable();
+
+		setLayoutByCouponApplyType(old_data.apply_type);
+		setLayoutByCouponType(old_data.type);
+		setLayoutByApplySaleType(old_data.apply_sale_type);
+
+		$content.find('input[name=\'apply_sale_price\']').val(old_data.apply_sale_type == 'percent' ? old_data.apply_sale_percent : old_data.apply_sale_price);
+		$content.find('input[name=\'apply_sale_type_minimum_price\']').val(old_data.apply_sale_type_minimum_price);
+		$content.find('input[name=\'apply_sale_type_max_price\']').val(old_data.apply_sale_type_max_price);
+
+		$content.find('input[name=\'is_overlap\']').prop('checked', old_data.is_overlap);
+		$content.find('input[name=\'is_duplication\']').prop('checked', old_data.is_duplication);
+
+		set_money_format($content.find('input[name=\'apply_sale_price\']'));
+		set_money_format($content.find('input[name=\'apply_sale_type_minimum_price\']'));
+		set_money_format($content.find('input[name=\'apply_sale_type_max_price\']'));
+
+		setHeaderCtlEvent();
+	};
+
+	function setGroupSelect(code){
+		const index = type_group_code_list.indexOf(code);
+		if(index > -1){
+			type_group_code_list.splice(index, 1);
+			$content.find('._check_drop_group_list li a[data-code=' + code + ']').parent().removeClass('selected');
+		}else{
+			if(code !== undefined && typeof code === 'string'){
+				type_group_code_list.push(code);
+				$content.find('._check_drop_group_list li a[data-code=' + code + ']').parent().addClass('selected');
+			}
+		}
+		if(type_group_code_list.length > 0){
+			select_group_code = select_group_code === '' ? type_group_code_list[0] : select_group_code;
+			if($.inArray(select_group_code, type_group_code_list) === -1){
+				select_group_code = type_group_code_list[0];
+			}
+			select_group_name = $content.find('._check_drop_group_list li a[data-code=' + select_group_code + ']').html();
+			// select_group_name.length > 15 ? select_group_name = select_group_name.substring(0,15) + "..." : select_group_name;
+			$group_name.find('._group_name_text').html(select_group_name);
+		}else{
+			$group_name.find('._group_name_text').html('그룹 선택');
+		}
+		group_count = type_group_code_list.length - 1;
+		group_count = group_count > 0 ? ' + ' + group_count : '';
+		$group_name.find('._group_count').html(group_count);
+	}
+
+	function clearGroupSelect(){
+		type_group_code_list = [];
+		$content.find('._check_drop_group_list li').removeClass('selected');
+		$group_name.find('._group_name_text').html('그룹 선택');
+		$group_name.find('._group_count').html('');
+	}
+
+	function clearCategorySelect(){
+		apply_type_category_list = [];
+		$content.find('._check_drop_category_list li').removeClass('active');
+		$group_name.find('._category_name_text').html(getLocalizeString('설명_카테고리선택', '', '카테고리선택'));
+		$group_name.find('._category_count').html('');
+	}
+
+	function setCategorySelect(){
+		var first_element = $content.find('input[class^="_coupon_checkbox-"]:checked').eq(0);
+
+		//쿠폰에 연동된 카테고리가 존재하지 않는경우 초기화
+		if(first_element.length === 0){
+			first_element = null;
+			apply_type_category_list = [];
+		}
+
+		if(apply_type_category_list.length > 0){
+			const category_name = $group_name.find('._category_name_text');
+			let select_group_name = '';
+			if(!first_element.data('root') && first_element.data('parent')){
+				//중간 자식일 경우
+				const middle_child_text = first_element.val();
+				const root_text = $('input[data-code=\'' + first_element.data('parent') + '\']').val();
+				select_group_name = root_text + ' > ' + middle_child_text;
+				category_name.html(select_group_name);
+			}else if(first_element.data('root') && first_element.data('parent')){
+				//자손일 경우
+				const descendant_text = first_element.val();
+				const root_text = $('input[data-code=\'' + first_element.data('root') + '\']').val();
+				const middle_child_text = $('input[data-code=\'' + first_element.data('parent') + '\']').val();
+				select_group_name = root_text + ' > ' + middle_child_text + ' > ' + descendant_text;
+				category_name.html(select_group_name);
+			}else{
+				select_group_name = first_element.val();
+				category_name.html(select_group_name);
+			}
+		}else{
+			$group_name.find('._category_name_text').html(getLocalizeString('설명_카테고리선택', '', '카테고리선택'));
+		}
+		category_count = apply_type_category_list.length - 1;
+		category_count = category_count > 0 ? '+' + category_count : '';
+		$group_name.find('._category_count').html(category_count);
+	};
+
+	function setCategory(code, type, parent_code){
+		if(type === 'descendant'){
+			apply_type_category_list.push(code);
+			addParentData(parent_code);
+		}else if(type === 'root'){
+			const child_node = $('.first_parent_list ul').find('input[class^="_coupon_checkbox-"]:checked');
+			if(!apply_type_category_list.includes(code)){
+				apply_type_category_list.push(code);
+			}
+			if(child_node){
+				$.each(child_node, (_, v) => {
+					if(!apply_type_category_list.includes($(v).data('code'))){
+						apply_type_category_list.push($(v).data('code'));
+					}
+				});
+			}
+		}else{
+			apply_type_category_list.push(code);
+			const find_child = $content.find('input[data-parent=\'' + code + '\']');
+			find_child.prop({checked : true});
+			addParentData(parent_code);
+			find_child.each(function(){
+				if($(this).find('.checkbox_group_third')){
+					const code = $(this).data('code');
+					apply_type_category_list.push(code);
+				}
+			});
+		}
+	}
+
+	function addParentData(parent_code){
+		const child_nodes = $('input[data-parent=\'' + parent_code + '\']');
+		const checked_child_nodes = $('input[data-parent=\'' + parent_code + '\']:checked');
+		const root_code = $('input[data-parent=\'' + parent_code + '\']').data('root');
+		if(child_nodes.length === checked_child_nodes.length){
+			if(!apply_type_category_list.includes(parent_code)){
+				apply_type_category_list.push(parent_code);
+			}
+		}
+		if(root_code){
+			const parent_nodes = $('input[data-parent=\'' + root_code + '\']');
+			const checked_parent_nodes = $('input[data-parent=\'' + root_code + '\']:checked');
+			if(parent_nodes.length === checked_parent_nodes.length){
+				if(!apply_type_category_list.includes(root_code)){
+					apply_type_category_list.push(root_code);
+				}
+			}
+		}
+	}
+
+	function delCategory(code, type, parent_code){
+		if(type === 'descendant'){
+			const child_nodes = $('input[data-parent=\'' + parent_code + '\']');
+			const checked_child_nodes = $('input[data-parent=\'' + parent_code + '\']:checked');
+			if(checked_child_nodes.length !== child_nodes.length){
+				deleteArrayValue(apply_type_category_list, parent_code);
+			}
+			deleteArrayValue(apply_type_category_list, $('input[data-code=\'' + code + '\']').data('root'));
+			deleteArrayValue(apply_type_category_list, code);
+		}else if(type === 'middle'){
+
+		}else{
+			//하위카테고리가 있는 카테고리일 경우
+			const child_nodes = $content.find('input[data-parent=\'' + code + '\']');
+			const checked_child_nodes = $content.find('input[data-parent=\'' + code + '\']:checked');
+			const is_middle_child = isBlank($('input[data-code=\'' + code + '\']').data('root'));
+			if(is_middle_child){
+				const parent_code = $('input[data-code=\'' + code + '\']').data('parent');
+				const middle_child_nodes = $('input[data-parent=\'' + parent_code + '\']');
+				const checked_middle_child_nodes = $('input[data-parent=\'' + parent_code + '\']:checked');
+				if(checked_middle_child_nodes.length !== middle_child_nodes.length){
+					deleteArrayValue(apply_type_category_list, parent_code);
+				}
+			}
+			if(checked_child_nodes.length === 0){
+				deleteArrayValue(apply_type_category_list, code);
+			}
+			child_nodes.each(function(_, v){ // 상위카테고리 해제시 전체 해제
+				if($(v).data('parent')){
+					deleteArrayValue(apply_type_category_list, $(v).data('code'));
+					if($(v).find('.check_box_group_third')){
+						delCategory($(v).data('code'));
+					}
+				}
+			});
+		}
+	}
+
+	//쿠폰 적용형식에 따른 레이아웃 설정
+	function setLayoutByCouponApplyType(type){
+		$content.find('._apply_type').hide();
+		$content.find('._product_list').hide();
+		$content.find('._excluded_product_form').show();
+
+		switch(type){
+			case 'category':
+				//수정상태가 아닐경우 선택된 카테고리 초기화
+				if(!is_modify && !is_copy_mode || (
+						is_copy_mode && apply_type_category_list.length === 0
+				)){
+					clearCategorySelect();
+				}
+				$content.find('._apply_type').show();
+				break;
+			case 'product':
+				$content.find('._product_list').show();
+				$content.find('._excluded_product_form').hide();
+				break;
+			default:
+				break;
+		}
+	}
+
+	// 다운로드 쿠폰 숨김처리시 발행알림 비활성화
+	function toggleAlarmWrap(){
+		if($content.find('input[name=\'is_hide\']').prop('checked')){
+			$content.find('._alarm_wrap').addClass('display-none');
+		}else{
+			$content.find('._alarm_wrap').removeClass('display-none');
+		}
+	}
+
+	function changeUseAutoChangeGroup(value){
+		if (value === 'Y') {
+			clearGroupSelect();
+			$content.find('input[name=auto_data_is_only_grade_up]').prop('disabled', false);
+			$content.find('input[name=auto_data_is_only_grade_up]').prop('checked', true);
+			$content.find('._auto_group_item').show();
+			$content.find('._manual_group_item').hide();
+		} else {
+			clearGroupSelect();
+			$content.find('input[name=auto_data_is_only_grade_up]').prop('checked', false);
+			$content.find('input[name=auto_data_is_only_grade_up]').prop('disabled', true);
+			$content.find('._auto_group_item').hide();
+			$content.find('._manual_group_item').show();
+		}
+	}
+
+	const changedTargetInput = (target_value) => {
+
+		$content.find('._type_input').css({'display' : 'none'});
+		$content.find('._is_only_app_helper').css({'display' : 'none'});
+
+		switch(target_value){
+			case 'group':
+				$content.find('._type_group_code').css({'display' : 'table-cell'});
+				break;
+			case 'crm':
+				$content.find('._type_crm').css({'display' : 'table-cell'});
+				break;
+			case 'specific_member':
+				$content.find('._type_specific_member_id').css({'display' : 'table-cell'});
+				break;
+			case 'app_group':
+				$content.find('._type_group_code').css({'display' : 'table-cell'});
+			case 'app_all':
+				$content.find('._is_only_app_helper').css({'display' : 'table-cell'});
+				break;
+			default:
+				break;
+		}
+	}
+
+	//쿠폰형식에 따른 레이아웃 설정
+	function setLayoutByCouponType(type){
+		const $start_date = $content.find('input[name=\'start_date\']');
+		const $end_date = $content.find('input[name=\'end_date\']');
+
+		$content.find('._type_target, _type_specific_member_id, ._type_group_code,._type_is_mult_coupon, ._type_coupon_code, ._type_coupon_create_count,._limit_count, ._is_only_app_helper, ._use_guest_coupon_wrap').hide();
+		// specific_member_id 값 초기화
+		$content.find('._type_specific_member_id input').val('');
+
+		if(is_modify){
+			$content.find('input[name=\'member_limit_count\']').off('click.member_limit_count').on('click.member_limit_count', function(){
+				alert(getLocalizeString('설명_쿠폰정보수정시에는동일회원최대', '', '쿠폰정보 수정시에는 동일 회원 최대 중복 사용 수 변경이 불가합니다.'));
+				return false;
+			});
+			$content.find('input[name=\'is_duplication\']').off('click.is_duplication').on('click.is_duplication', function(){
+				alert(getLocalizeString('설명_쿠폰정보수정시에는중복사용', '', '쿠폰정보 수정시에는 중복 사용 가능 수정이 변경이 불가합니다.'));
+				return false;
+			});
+		}
+		$content.find('._type_target').css({'display' : 'block'});
+		if(is_modify){
+			$content.find('input[name=\'member_limit_count\']').val(old_data.member_limit_count).prop('readOnly', true);
+		}
+		$content.find('input[name=\'member_limit_count\']').off('blur').on('blur', function(){
+			if($(this).val() == 0 || $(this).val().trim() == ''){
+				$(this).val(1);
+			}
+		});
+		var $member_limit = $content.find('._member_limit_toggle');
+		$member_limit.on('click', function(){
+			if($member_limit.find('._is_member_limit').prop('checked')){
+				$content.find('._member_limit_count').attr('disabled', true);
+			}else{
+				const isSingleCoupon = $content.find('select[name=type_is_mult_coupon]').val() === 'N';
+				const isMember = $content.find('._is_member').prop('checked');
+				const memberLimitToggleCheckValue = $member_limit.find('._is_member_limit').prop('checked');
+				if(isSingleCoupon && isMember && !memberLimitToggleCheckValue){
+					$('input[name=is_duplication]').prop('checked', true);
+					$content.find('._member_limit_count').attr('disabled', true);
+					alert(`단일 쿠폰코드는 발행대상이 '회원'일 때 사용횟수를 설정할 수 있습니다.`);
+				}else{
+					$content.find('._member_limit_count').attr('disabled', false);
+				}
+			}
+		});
+
+		var $calendar_limit = $content.find('._calendar_limit_toggle');
+		$calendar_limit.on('click', function(){
+			if($calendar_limit.find('input[name=\'is_auto_unlimited_date\']').prop('checked')){
+				$content.find('._calendar_limit').attr('disabled', true);
+			}else{
+				$content.find('._calendar_limit').attr('disabled', false);
+			}
+		});
+
+		$content.find('input[name=day_limit]').val(15);
+
+		if(type === 'create'){//쿠폰 생성시 설정
+			const createTargetType = is_copy_mode ? old_data.type_target === 'all' ? 'isMember' : 'member' : undefined;
+
+			changeCouponTypeTarget('type_create_target', createTargetType);
+			if(is_modify){
+				if(old_data.type_is_mult_coupon){
+					$content.find('._type_coupon_create_count').css({'display' : 'table-cell'});
+					$content.find('._type_coupon_code').css({'display' : 'none'});
+				}else{
+					$content.find('._type_coupon_create_count').css({'display' : 'none'});
+					$content.find('._type_coupon_code').css({'display' : 'table-cell'});
+				}
+			}
+			$content.find('._used_count').css({'display' : 'block'});
+			$content.find('._type_is_mult_coupon').css({'display' : 'block'});
+			$content.find('._use_guest_coupon_wrap').css({'display' : 'table-cell'});
+
+			$content.find('._alarm_wrap').addClass('display-none');
+			$content.find('._type_auto').addClass('display-none');
+			$content.find('._type_down').addClass('display-none');
+			$content.find('._type_targeted').addClass('display-none');
+			$content.find('._duration_type_wrap').addClass('display-none');
+
+			$content.find('._type_create').removeClass('display-none');
+			$content.find('._calendar_view').removeClass('display-none');
+
+			if(is_modify){
+				$content.find('input[name=\'is_duplication\']').prop({
+					'checked' : old_data.is_duplication,
+				});
+			}
+			$content.find('select[name=type_is_mult_coupon]').val(old_data.type_is_mult_coupon ? 'Y' : 'N');
+			$content.find('._type_coupon_code').css({'display' : 'table-cell'});
+			var $real_member = $('._member');
+			$content.find('select[name=\'type_is_mult_coupon\']').off('change').on('change', function(){
+				if(!is_modify){
+					if($(this).val() == 'Y'){
+						$content.find('._type_coupon_create_count').css({'display' : 'table-cell'});
+						$content.find('._type_coupon_code').css({'display' : 'none'});
+					}else{
+						$content.find('._type_coupon_create_count').css({'display' : 'none'});
+						$content.find('._type_coupon_code').css({'display' : 'table-cell'});
+					}
+					$real_member.prop('checked', true);
+					COUPON.changeCouponTypeTarget('type_create_target'); // IMOPS-1492 : 여러쿠폰코드 선택 후 회원+비회원으로 설정 뒤 다시 단일쿠폰코드 선택시 회원+비회원 버튼은 비활성화되지만 value는 남아있는 문제
+				}else{
+					$content.find('select[name=type_is_mult_coupon]').val(old_data.type_is_mult_coupon ? 'Y' : 'N');
+					alert(getLocalizeString('설명_쿠폰정보수정시쿠폰형식변경불가', '', '쿠폰정보 수정시에는 쿠폰형식을 변경할 수 없습니다.'));
+					return false;
+				}
+			});
+			$content.find('input[name=\'is_signin\']').eq(0).prop('checked', true);
+			$content.find('input[name=\'is_signin\']').off('change').on('change', function(){
+				$content.find('._used_count').css({
+					'display' : $(this).val() == 'signedin' ? 'block' : 'none',
+				});
+			});
+			const type_coupon_code = is_modify ? old_data.type_coupon_code : '';
+
+			$content.find('input[name=\'type_coupon_code\']').val(type_coupon_code).prop('readOnly', is_modify);
+			$content.find('input[name=\'type_coupon_create_count\']').val(old_data.type_coupon_create_count).prop('readOnly', is_modify);
+			$content.find('input[name=\'type_coupon_create_count\']').off('keyup.type_coupon_create_count').on('keyup.type_coupon_create_count', function(){
+				$(this).val($(this).val() > 10000 ? 10000 : $(this).val());
+			});
+
+			$calendar_limit.addClass('m-block');
+			$calendar_limit.removeClass('display-none');
+			$end_date.data('DateTimePicker').maxDate(new Date('2099-12-31'));
+
+		}else if(type === 'auto'){
+			// 수정모드나 복사모드가 아닐 때만 초기화
+			if (!is_modify && !is_copy_mode) {
+				$content.find('select[name="type_auto_target"]').val($content.find('select[name="type_auto_target"] option:first').val());
+			}
+			changeCouponTypeTarget('type_auto_target');
+			$content.find('._used_count').css({'display' : 'block'});
+
+			$content.find('._calendar_view').addClass('display-none');
+			$content.find('._type_down').addClass('display-none');
+			$content.find('._type_targeted').addClass('display-none');
+			$content.find('._type_create').addClass('display-none');
+			$content.find('._duration_type_wrap').addClass('display-none');
+
+			$content.find('._alarm_wrap').removeClass('display-none');
+			$content.find('._type_auto').removeClass('display-none');
+
+			$content.find('._auto_data_day_limit_prefix').html('쿠폰이 발행된 날부터');
+
+			var $auto_day_limit = $content.find('input[name=\'auto_data_day_limit\']');
+			$auto_day_limit.off('blur').on('blur', function(){
+				if($(this).val() == 0){
+					$(this).val(1);
+				}
+			});
+
+			if(is_modify){
+				$content.find('input[name=\'is_auto_unlimited_date\']').prop('checked', old_data.is_unlimited_date);
+				if($content.find('input[name=\'is_auto_unlimited_date\']').prop('checked')){
+					$content.find('input[name=\'auto_data_day_limit\']').attr('disabled', true);
+				}else{
+					$content.find('input[name=\'auto_data_day_limit\']').attr('disabled', false);
+				}
+
+
+				if(old_data.type_target == 'order'){
+					$content.find('._auto_order_list').css({'display' : 'table-cell'});
+				}
+				if(old_data.type_target == 'grade_change') {
+					$content.find('._type_group_code').css({'display' : 'table-cell'});
+				}
+
+				let old_day_limit = old_data.auto_data['day_limit'] ? old_data.auto_data['day_limit'] : 15;
+				$content.find('input[name=\'auto_data_day_limit\']').val(old_day_limit);
+
+				$content.find('._auto_order_list').off('change').on('change', function(){
+					$content.find('select[name=auto_data_order_type]').val(old_data.auto_data['order_type']);
+					alert(getLocalizeString('설명_쿠폰정보수정시쿠폰형식변경불가', '', '쿠폰정보 수정시에는 쿠폰형식을 변경할 수 없습니다.'));
+				});
+			}
+
+			if(is_copy_mode){
+				if(old_data.type_target == 'order'){
+					$content.find('._auto_order_list').css({'display' : 'table-cell'});
+				}
+				if(old_data.type_target == 'grade_change') {
+					$content.find('._type_group_code').css({'display' : 'table-cell'});
+				}
+			}
+			var $day_limit = $content.find('._day_limit_toggle');
+			$day_limit.on('click', function(){
+				if($day_limit.find('._is_unlimited_date').prop('checked')){
+					$content.find('input[name=\'auto_data_day_limit\']').attr('disabled', true);
+				}else{
+					$content.find('input[name=\'auto_data_day_limit\']').attr('disabled', false);
+				}
+			});
+			$content.find('select[name=\'type_auto_target\']').off('change').on('change', function(){
+				if(is_modify){
+					$content.find('select[name=type_auto_target]').val(old_data.type_target);
+					alert(getLocalizeString('설명_쿠폰정보수정시쿠폰형식변경불가', '', '쿠폰정보 수정시에는 쿠폰형식을 변경할 수 없습니다.'));
+				}else{
+					// 발행대상 수정시에 그룹선택 초기화
+					clearGroupSelect();
+					$(this).val() == 'order' ? $content.find('._auto_order_list').css({'display' : 'table-cell'}) : $content.find('._auto_order_list').css({'display' : 'none'});
+					$(this).val() == 'grade_change' ? $content.find('._type_group_code').css({'display' : 'table-cell'}) : $content.find('._type_group_code').css({'display' : 'none'});
+				}
+			});
+
+			$calendar_limit.addClass('m-block');
+			$calendar_limit.removeClass('display-none');
+			$end_date.data('DateTimePicker').maxDate(new Date('2099-12-31'));
+
+		}else if(type === 'down'){//고객 다운로드시 설정
+			changeCouponTypeTarget('type_down_target');
+
+			// 변경시 초기화
+			$content.find('._type_group_code').css({'display' : 'none'});
+			$content.find('._is_only_app_helper').css({'display' : 'none'});
+			$content.find('._type_crm').css({'display' : 'none'});
+			$content.find('._type_specific_member_id').css({'display' : 'none'});
+
+			$content.find('._used_count').css({'display' : 'block'});
+			$content.find('select[name=\'type_down_target\']').val(old_data.type_target);
+			$content.find('select[name=\'type_down_target\']').off('change.type_down_target').on('change.type_down_target', function(){
+				if(is_modify){
+					$(this).val(old_data.type_target);
+					alert(getLocalizeString('설명_쿠폰정보수정시에는대상을변경', '', '쿠폰정보 수정시에는 대상을 변경할 수 없습니다.'));
+					return false;
+				}
+
+				var type_target_list_value = $(this).val();
+				$content.find('._use_guest_coupon_wrap').css({'display' : 'none'});
+				// 발행대상 수정시에 그룹선택 초기화
+				clearGroupSelect();
+				changedTargetInput(type_target_list_value);
+			});
+
+			changedTargetInput($content.find('select[name=\'type_down_target\']').val());
+
+			if(is_modify){
+				$content.find('input[name=\'is_auto_unlimited_date\']').prop('checked', old_data.is_unlimited_date);
+				if($content.find('input[name=\'is_auto_unlimited_date\']').prop('checked')){
+					$content.find('input[name=\'auto_data_day_limit\']').attr('disabled', true);
+				}else{
+					$content.find('input[name=\'auto_data_day_limit\']').attr('disabled', false);
+				}
+			}
+
+			$content.find('._is_limit_toggle').on('click', function(){
+				if($content.find('input[name=\'is_limit\']').prop('checked')){
+					$content.find('input[name=\'limit_count\']').attr('disabled', true);
+				}else{
+					$content.find('input[name=\'limit_count\']').attr('disabled', false);
+				}
+			});
+
+			$content.find('._type_auto').addClass('display-none');
+			$content.find('._type_targeted').addClass('display-none');
+			$content.find('._type_create').addClass('display-none');
+
+			if(!$content.find('input[name=\'is_hide\']').prop('checked')){
+				$content.find('._alarm_wrap').removeClass('display-none');
+			}
+			$content.find('._type_down').removeClass('display-none');
+			$content.find('._duration_type_wrap').removeClass('display-none');
+
+			$calendar_limit.addClass('m-block');
+			$calendar_limit.removeClass('display-none');
+			$end_date.data('DateTimePicker').maxDate(new Date('2099-12-31'));
+
+			$content.find('._auto_data_day_limit_prefix').html('다운로드 일로부터');
+
+			$content.find('input[name=\'limit_count\']').val(old_data.limit_count).prop('readOnly', is_modify);
+
+			var $day_limit = $content.find('._day_limit_toggle');
+			$day_limit.on('click', function(){
+				if($day_limit.find('._is_unlimited_date').prop('checked')){
+					$content.find('input[name=\'auto_data_day_limit\']').attr('disabled', true);
+				}else{
+					$content.find('input[name=\'auto_data_day_limit\']').attr('disabled', false);
+				}
+			});
+
+			// 사용기간 이벤트 설정
+			changeDurationType(old_data.duration_type);
+			$content.find('input[name="duration_type"]').off('change').on('change', function(){
+				changeDurationType($(this).val());
+			});
+
+		}else if(type === 'targeted'){ // 지정발행 쿠폰시 설정
+			changeCouponTypeTarget('type_targeted_target');
+			// 변경시 초기화
+			$content.find('._type_group_code').css({'display' : 'none'});
+			$content.find('._is_only_app_helper').css({'display' : 'none'});
+			$content.find('._type_crm').css({'display' : 'none'});
+			$content.find('._used_count').css({'display' : 'none'}); // 지정발행 쿠폰의 경우 무조건 1회성 쿠폰으로 사용횟수 설정 UI 제거
+
+			$content.find('select[name=\'type_targeted_target\']').val(old_data.type_target);
+			$content.find('select[name=\'type_targeted_target\']').off('change.type_targeted_target').on('change.type_targeted_target', function(){
+				if(is_modify){
+					$(this).val(old_data.type_target);
+					alert(getLocalizeString('설명_쿠폰정보수정시에는대상을변경', '', '쿠폰정보 수정시에는 대상을 변경할 수 없습니다.'));
+					return false;
+				}
+
+				var type_target_list_value = $(this).val();
+				$content.find('._use_guest_coupon_wrap').css({'display' : 'none'});
+				// 발행대상 수정시에 그룹선택 초기화
+				clearGroupSelect();
+				changedTargetInput(type_target_list_value);
+			});
+
+			changedTargetInput($content.find('select[name=\'type_targeted_target\']').val());
+
+			$content.find('._type_auto').addClass('display-none');
+			$content.find('._type_down').addClass('display-none');
+			$content.find('._type_create').addClass('display-none');
+			$content.find('._duration_type_wrap').addClass('display-none');
+
+			$content.find('._alarm_wrap').removeClass('display-none');
+			$content.find('._calendar_view').removeClass('display-none');
+			$content.find('._type_targeted').removeClass('display-none');
+
+			// 지정발행 쿠폰의 경우 유효기간 최대 40일이므로 무제한 설정 체크박스 제거
+			$calendar_limit.removeClass('m-block');
+			$calendar_limit.addClass('display-none');
+			$content.find('input[name=\'is_unlimited_date\']').prop('checked', false);
+			$content.find('input[name=\'is_auto_unlimited_date\']').prop('checked', false);
+			$content.find('._calendar_limit').attr('disabled', false);
+			$content.find('input[name=\'auto_data_day_limit\']').attr('disabled', false);
+
+			// 유효기간을 쿠폰 생성일부터 40일까지만 설정 가능하도록 처리 (쿠폰 최초 생성시에는 현재날짜 + 40일, 수정시에는 저장돼있는 쿠폰 생성일 + 40일)
+			if(is_modify){
+				let oldCouponCreateDateForMaxDate = new Date(old_data.create_date);
+				oldCouponCreateDateForMaxDate.setDate(oldCouponCreateDateForMaxDate.getDate() + 40);
+				// 해당 날짜의 23:59:59로 설정
+				oldCouponCreateDateForMaxDate.setHours(23, 59, 59, 999);
+				$end_date.data('DateTimePicker').maxDate(oldCouponCreateDateForMaxDate);
+			}else{
+				let maxDate = $start_date.data('DateTimePicker').date().add(40, 'days').toDate();
+				// 해당 날짜의 23:59:59로 설정
+				maxDate.setHours(23, 59, 59, 999);
+				$end_date.data('DateTimePicker').maxDate(maxDate);
+			}
+		}
+	}
+
+	//쿠폰 할인형식에 따른 레이아웃 설정
+	function setLayoutByApplySaleType(type){
+		var $_sale_amount_type = $content.find('._sale_amount_type');
+		$_sale_amount_type.off('change.apply_sale_type').on('change.apply_sale_type', function(){
+			var apply_sale_type_value = $(this).val();
+
+			if(apply_sale_type_value == 'percent' || apply_sale_type_value == 'delivery'){
+				$content.find('._apply_sale_type_max_price').css({'display' : 'block'});
+			}else{
+				$content.find('._apply_sale_type_max_price').css({'display' : 'none'});
+			}
+
+			// 추가할인가능 옵션 체크박스 표시/숨김 처리
+			if(apply_sale_type_value == 'fix_price'){
+				// 체크박스 해제
+				$content.find('input[name="is_overlap"]').prop('checked', false);
+				$content.find('input[name="is_overlap"]').prop('disabled', true);
+			} else {
+				$content.find('input[name="is_overlap"]').prop('disabled', false);
+			}
+
+			switch(apply_sale_type_value){
+				case 'price':
+					$_sale_amount_type.val('price');
+					set_money_format($content.find('input[name=\'apply_sale_price\']'));
+					break;
+				case 'percent':
+					$_sale_amount_type.val('percent');
+					set_money_format($content.find('input[name=\'apply_sale_price\']'), 0);
+					break;
+				case 'fix_price':
+					$_sale_amount_type.val('price');
+					// FIX_PRICE 타입일 경우 % 옵션 숨김
+					$content.find('#sale_amount_type_percent').css({'display' : 'none'});
+					$content.find('#sale_amount_type_percent').prop('disabled', true).prop('hidden', true);
+					// FIX_PRICE 타입일 경우 자동으로 APPLY_TYPE_PRODUCT 선택
+					if(!is_modify) {
+						$content.find('select[name=apply_type]').val('product').trigger('change');
+						$content.find('select[name=apply_type]').prop('disabled', true);
+					}
+					break;
+			}
+
+			srtPriceInput(apply_sale_type_value);
+		}).trigger('change');
+
+		if(type == 'percent' || type == 'delivery'){
+			$content.find('._apply_sale_type_max_price').css({'display' : 'block'});
+		}else{
+			$content.find('._apply_sale_type_max_price').css({'display' : 'none'});
+		}
+
+		// 추가할인가능 옵션 체크박스 표시/숨김 처리
+		if(type == 'fix_price'){
+			// 체크박스 해제
+			$content.find('input[name="is_overlap"]').prop('checked', false);
+			$content.find('input[name="is_overlap"]').prop('disabled', true);
+			// FIX_PRICE 타입일 경우 % 옵션 숨김
+			$content.find('#sale_amount_type_percent').prop('disabled', true).prop('hidden', true);
+			$content.find('#sale_amount_type_percent').css({'display' : 'none'});
+			// price(KRW) 옵션 강제 선택
+			$content.find('._sale_amount_type').val('price');
+		} else {
+			$content.find('input[name="is_overlap"]').prop('disabled', false);
+			// 다른 타입일 경우 % 옵션 표시
+			$content.find('#sale_amount_type_percent').prop('disabled', false).prop('hidden', false);
+			$content.find('#sale_amount_type_percent').css({'display' : 'block'});
+		}
+
+		// FIX_PRICE 타입일 경우 자동으로 APPLY_TYPE_PRODUCT 선택
+		if(type == 'fix_price' && !is_modify) {
+			$content.find('select[name=apply_type]').val('product').trigger('change');
+			$content.find('select[name=apply_type]').prop('disabled', true);
+		}
+
+		srtPriceInput(type);
+	}
+
+
+	function srtPriceInput(type){
+		$content.find('input[name=\'apply_sale_price\']').off('blur.percent').on('blur.percent', function(){
+			if(type == 'percent'){
+				var max_pernect = 100;
+				$(this).val($(this).val() > max_pernect ? max_pernect : $(this).val());
+			}else{
+				var option = {max_byte : 8};
+				$(this).limitLength(option);
+			}
+		});
+		$content.find('input[name=\'apply_sale_type_minimum_price\']').off('blur.apply_sale_type_minimum_price').on('blur.apply_sale_type_minimum_price', function(){
+			var option = {max_byte : 8};
+			$(this).limitLength(option);
+		});
+	}
+
+	//리스트 체크박스 체크시 삭제버튼 표시
+	function showDeleteBtn(){
+		$content.find('._list_header').hide();
+		$content.find('._list_delete_header').css({'display' : 'table-header-group'});
+	}
+
+	//리스트 체크박스 체크 해지시 삭제버튼 숨김
+	function hideDeleteBtn(){
+		$content.find('._list_header').css({'display' : 'table-header-group'});
+		$content.find('._list_delete_header').hide();
+	}
+
+	var setHeaderCtlEvent = function(){
+		//쿠폰만들기 버튼 생성
+		header_ctl = new HEADER_CONTROL();
+		header_ctl.init();
+		header_ctl.addBtn('cancel', function(){
+			header_ctl.save();
+			history.go(-1);
+		});
+		header_ctl.addBtn('save', function(){
+			submit();
+		});
+		$content.find('input, textarea').off('change, keyup').on('change, keyup', function(){
+			header_ctl.change();
+		});
+		$content.find('select').change(function(){
+			header_ctl.change();
+		});
+		$content.find('input[type=checkbox],input[type=radio]').off('click').on('click', function(){
+			header_ctl.change();
+		});
+
+		if(is_copy_mode === true){
+			header_ctl.change();
+		}
+	};
+
+	//쿠폰데이터 체크 및 전송
+	function submit(){
+		if(is_submit){
+			return;
+		}
+		
+		// 폼 제출 전 disabled 속성 제거 (값이 전송되도록)
+		$content.find('select[name=apply_type]').prop('disabled', false);
+		
+		var data = $content.find('._coupon_add_form').serializeObject();
+		data['type_group_code'] = type_group_code_list;
+		data['apply_type_category_list'] = apply_type_category_list;
+		data['apply_type_product_list'] = product_list;
+		data['apply_excluded_product_list'] = excluded_product_list;
+
+		// type_specific_member_id 중에서 값이 없는 빈칸 제거 및 배열이 아닌 일반 문자열로 변환
+		if(data['type_specific_member_id']){
+			data['type_specific_member_id'] = data['type_specific_member_id'].filter(function(item){
+				return item !== '';
+			}).join(',');
+		}
+
+		// 쿠폰 적용 범위에 따라 서버로 보내는 상품 데이터 초기화 처리
+		if(data.apply_type === 'all'){
+			data['apply_type_product_list'] = [];
+		}
+
+		if(data.apply_type === 'category'){
+			data['apply_type_product_list'] = [];
+		}
+
+		if(data.apply_type === 'product'){
+			data['apply_excluded_product_list'] = [];
+		}
+
+		is_submit = true;
+		$.ajax({
+			type : 'POST',
+			data : data,
+			url : (
+					'/admin/ajax/coupon/add_coupon.cm'
+			),
+			dataType : 'json',
+			success : function(res){
+				if(res.msg == 'SUCCESS'){
+					let event = '';
+					if(data['code']){
+						// 쿠폰 수정 완료
+						event = 'edit_bo_shopping_coupon_item';
+					}else{
+						// 쿠폰 만들기 완료
+						event = 'complete_bo_shopping_coupon_item';
+					}
+					mixpanel.track(event, {
+						'name' : data['name'],
+						'type' : data['type'],
+						'target' : data['type_target'],
+						'offer_type' : getOfferTypeText(data['benefit_type']),
+						'site_code' : SITE_CODE,
+					});
+					header_ctl.save();
+					history.go(-1);
+				}else{
+					alert(res.msg);
+					is_submit = false;
+				}
+			},
+		});
+	}
+
+	//발행 중지, 재개
+	function updateCouponIssueFlag(code, flag){
+		var msg = '';
+		if(flag == 'N'){
+			msg = getLocalizeString('설명_발행을중지하시겠습니까', '', '발행을 중지하시겠습니까?');
+		}else{
+			msg = getLocalizeString('설명_발행을재개하시겠습니까', '', '발행을 재개하시겠습니까?');
+		}
+		$.cocoaDialog.open({
+			type : 'save',
+			terms : msg,
+		}, function(res){
+			if(res){
+				var update_list = [];
+				if(isBlank(code)){
+					var list = $content.find('._check_list:checked');
+					$content.find('._check_list:checked').each(function(){
+						update_list.push($(this).val());
+					});
+				}else{
+					update_list.push(code);
+				}
+
+				if(update_list.length > 0){
+					$.ajax({
+						type : 'POST',
+						data : {'list' : update_list, 'flag' : flag},
+						url : (
+								'/admin/ajax/coupon/update_coupon_issue_flag.cm'
+						),
+						dataType : 'json',
+						success : function(res){
+							if(res.msg === 'SUCCESS'){
+								history.go(0);
+							}else{
+								alert(res.msg);
+							}
+						},
+					});
+				}
+			}
+		});
+	}
+
+	//쿠폰 삭제하기
+	function deleteCoupon(code){
+		$.cocoaDialog.open({
+			type : 'alert_clay',
+			title : '쿠폰을 삭제할까요?',
+			confirm_text : '삭제',
+			cancel_text : '취소',
+		}, function(){
+			const delete_list = [];
+			if(isBlank(code)){
+				$content.find('._check_list:checked').each(function(){
+					delete_list.push($(this).val());
+				});
+			}else{
+				delete_list.push(code);
+			}
+
+			if(delete_list.length > 0){
+				$.ajax({
+					type : 'POST',
+					data : {list : delete_list},
+					url : (
+							'/admin/ajax/coupon/delete_coupon.cm'
+					),
+					dataType : 'json',
+					success : function(res){
+						if(res.msg === 'SUCCESS'){
+							// 쿠폰 삭제 완료
+							mixpanel.track('delete_bo_shopping_coupon_item', {'site_code' : SITE_CODE});
+							history.go(0);
+						}else{
+							alert(res.msg);
+						}
+					},
+				});
+			}
+		});
+	}
+
+	/**
+	 * 키워드 서치 시작
+	 */
+	function startKeywordSearch(){
+		var keyword = $.trim($content.find('._coupon_search').val());
+		var status = $content.find('input[name=\'status\']').val();
+		mixpanel.track('search_bo_shopping_coupon', {
+			'keyword' : keyword,
+			'site_code' : SITE_CODE,
+		});
+		window.location.href = current_base_url + '&search_data=' + encodeURIComponent(keyword) + '&status=' + status + '&page=1';
+	}
+
+	function showCouponSettingToast(contents){
+		$.cocoaToast.show({
+			html : `<div class="tw-flex tw-items-center"><span class="tw-inline-block tw-mr-clay-2"><img src=${VENDOR_DOMAIN}/images/admin/shopping/coupon/check.svg alt="checkIcon"/></span><p>${contents}</p></div>`,
+		});
+	}
+
+	function setIsCouponSettingOpen(isOpen){
+		is_coupon_setting_open = isOpen;
+	}
+
+	function closeCouponSettingDialog(){
+		$('._coupon_setting_dialog_wrap').remove();
+		$('._setting_coupon_pulse').remove();
+		$('._coupon_setting_tutorial_wrap').remove();
+		is_coupon_setting_open = false;
+	}
+
+	/**
+	 *  BO 쿠폰 설정 메소드
+	 */
+	function setDesignCouponSetting(settings){
+		$.ajax({
+			type : 'POST',
+			url : '/admin/ajax/coupon/set_design_coupon_setting.cm',
+			dataType : 'json',
+			cache : false,
+			data : settings,
+			success : function(res){
+				if(res.msg !== 'SUCCESS'){
+					alert(res.msg);
+				}
+			},
+		});
+	}
+
+
+	/**
+	 * 쿠폰설정 다이얼로그 열기
+	 */
+	function openCouponSettingDialog(isTutorial = false){
+		if(is_coupon_setting_open){
+			return closeCouponSettingDialog();
+		}
+		if(!isTutorial){
+			$('._btn_spinner').show();
+		}
+
+		$.ajax({
+			type : 'POST',
+			url : '/admin/ajax/dialog/coupon_setting.cm',
+			dataType : 'json',
+			data : {
+				is_tutorial : isTutorial,
+			},
+			cache : false,
+			success : function(res){
+				if(res.msg === 'SUCCESS'){
+					const $coupon_setting_wrap = $('._coupon_setting_button_wrap');
+					is_coupon_setting_open = true;
+					$coupon_setting_wrap.append(res.html);
+
+					// 다이얼로그 외 영역 클릭 시 다이얼로그 닫기
+					$('main').on('click', function(event){
+						if(!$(event.target).closest('._coupon_setting_dialog_wrap, .clay-button').length && $('.popover').length === 0){
+							if(isTutorial){
+								$('._setting_coupon_pulse').remove();
+								$('._coupon_setting_tutorial_wrap').remove();
+							}
+							$('._coupon_setting_dialog_wrap').remove(); // 클릭한 요소가 다이얼로그 창이 아니면  닫기
+							is_coupon_setting_open = false;
+						}
+					});
+
+					// 다이얼로그 DOM 요소들
+					const $receiveCoupon = $('#receive_coupon');
+					const $receiveCouponCheckboxLabel = $('._receive_coupon_label');
+
+					const $viewCouponPrice = $('#view_coupon_price');
+					const $viewCouponPriceCheckboxLabel = $('._view_coupon_price_label');
+
+					// 쿠폰받기 토글 핸들러
+					$receiveCoupon.off('change').on('change', function(){
+						// 튜토리얼에서는 기능작동x
+						if(isTutorial){
+							return;
+						}
+
+						const isChecked = $receiveCoupon.is(':checked');
+						$receiveCouponCheckboxLabel.attr('data-checked', isChecked);
+
+						setDesignCouponSetting({
+							shop_coupon_get_btn : isChecked ? 'Y' : 'N',
+						});
+						mixpanel.track('click_bo_shopping_coupon_get_coupon_button_toggle', {
+							site_code : SITE_CODE,
+							status : isChecked,
+						});
+
+						if(isChecked){
+							showCouponSettingToast('쿠폰받기 버튼이 상품 상세페이지에 노출돼요');
+						}else{
+							showCouponSettingToast('노출 설정이 해제되었어요');
+						}
+
+					});
+
+					// 회원등급가가 적용된 상태에서 쿠폰적용가로 변경할 경우 확인 팝업 띄우기
+					function openConfirmDialog(){
+						$.cocoaDialog.open({
+							type : 'alert_clay',
+							title : '쿠폰 적용가 표시',
+							content : '쿠폰 적용가를 표시할 경우 회원 등급가 표시가 사라집니다.<br />그래도 변경할까요?',
+							confirm_text : '변경',
+							cancel_text : '취소',
+						}, function(res){
+							$viewCouponPriceCheckboxLabel.attr('data-checked', true);
+							$viewCouponPrice.prop('checked', true);
+							setDesignCouponSetting({
+								shop_view_coupon_price : 'Y',
+								shop_view_discount_price_none : 'N',
+								shop_view_membership_price : 'N',
+							});
+
+							mixpanel.track('click_bo_shopping_coupon_view_coupon_price_toggle', {
+								site_code : SITE_CODE,
+								status : true,
+							});
+							showCouponSettingToast('쿠폰이 적용된 가격이 상세 페이지에 노출돼요');
+						});
+
+						$.cocoaDialog.obj.on('hidden.bs.modal', () => {
+							if(getCookie('NO_EXPIRE_POPUP') !== 'Y' && EXPIRE_TYPE !== ''){
+								SADMIN_POPUP.openPopupExpire(EXPIRE_TYPE, EXPIRE_PERIOD);
+							}
+						});
+
+						$.cocoaDialog.obj.on('hidden.bs.modal', function(e){
+							$viewCouponPriceCheckboxLabel.attr('data-checked', false);
+							$viewCouponPrice.prop('checked', false);
+						});
+					}
+
+					// 쿠폰적용가 토글 핸들러
+					$viewCouponPrice.off('change').on('change', function(){
+						// 튜토리얼에서는 기능작동x
+						if(isTutorial){
+							return;
+						}
+
+						const isChecked = $viewCouponPrice.is(':checked');
+						let shopViewMembershipPrice = '';
+
+						if(isChecked){
+							$.ajax({
+								type : 'GET',
+								url : '/admin/ajax/coupon/get_shop_view_membership_price.cm',
+								dataType : 'json',
+								async : false,
+								cache : false,
+								success : function(res){
+									shopViewMembershipPrice = res.shopViewMembershipPrice;
+								},
+							});
+						}
+
+						// 쿠폰 적용가와 회원등급가는 동시 설정할 수 없음
+						// 회원등급가를 표시하고 있는데 쿠폰 적용가를 표시할 경우 확인 팝업 띄움
+						if(shopViewMembershipPrice === 'Y' && isChecked){
+							return openConfirmDialog();
+						}
+
+						$viewCouponPriceCheckboxLabel.attr('data-checked', isChecked);
+						const settings = {
+							shop_view_coupon_price : isChecked ? 'Y' : 'N',
+							shop_view_discount_price_none : isChecked ? 'N' : 'Y',
+							shop_view_membership_price : 'N',
+						};
+
+						setDesignCouponSetting(settings);
+						mixpanel.track('click_bo_shopping_coupon_view_coupon_price_toggle', {
+							site_code : SITE_CODE,
+							status : isChecked,
+						});
+
+						if(isChecked){
+							showCouponSettingToast('쿠폰이 적용된 가격이 상세 페이지에 노출돼요');
+						}else{
+							showCouponSettingToast('노출 설정이 해제되었어요');
+						}
+					});
+				}
+			},
+			complete : function(){
+				$('._btn_spinner').hide();
+			},
+		});
+	}
+
+
+	/***
+	 * 쿠폰 내역확인 다이일로그 열기
+	 */
+	function openIssueDialog(code, callback){
+		$.ajax({
+			type : 'POST',
+			url : (
+					'/admin/ajax/dialog/coupon_detail.cm'
+			),
+			data : {'code' : code},
+			dataType : 'json',
+			async : false,
+			cache : false,
+			success : function(res){
+				if(res.msg === 'SUCCESS'){
+					// 쿠폰 사용내역 보기
+					mixpanel.track('view_bo_shopping_coupon_history', {'site_code' : SITE_CODE});
+					var $html = res.html;
+					$.cocoaDialog.open({type : 'coupon_detail', custom_popup : $html}, function(){
+						$issue_search_btn = $('#issue_search_btn');
+						$issue_search_type = $('#issue_search_type');
+						$issue_search_input = $('#issue_search_input');
+						current_page = 1;
+						getIssueDataList(code, current_page);
+						$issue_search_input.off('keypress.issue_search_input').on('keypress.issue_search_input', function(e){
+							if(e.which == 13){
+								if($issue_search_input.val() === '' || $issue_search_input.val() === undefined){
+									alert(getLocalizeString('설명_s을를입력하세요', getLocalizeString('설명_검색어', '', '검색어'), '%1 을(를) 입력하세요'));
+									return false;
+								}
+								getIssueDataList(code, current_page);
+							}
+						});
+						$issue_search_btn.off('click.issue_search_btn').on('click.issue_search_btn', function(){
+							if($issue_search_input.val() === '' || $issue_search_input.val() === undefined){
+								alert(getLocalizeString('설명_s을를입력하세요', getLocalizeString('설명_검색어', '', '검색어'), '%1 을(를) 입력하세요'));
+								return false;
+							}
+							getIssueDataList(code, current_page);
+						});
+						$('#excel_download').off('click.excel_download').on('click.excel_download', function(){
+							downloadCreateCouponIssueList(code);
+						});
+						$('#excel_download_use').off('click.excel_download_use').on('click.excel_download_use', function(){
+							downloadCreateCouponIssueList(code, true);
+						});
+
+						COUPON.loadExcelList(code, callback);
+					});
+				}else{
+					alert(res.msg);
+				}
+			},
+		});
+	}
+
+	/***
+	 * 쿠폰적용상품 Or 제외상품 선택용 상품검색 다이얼로그 열기
+	 * parameter product_list_type value에 따라 다르게 동작
+	 */
+	function openProductSearchDialog(product_list_type = 'apply'){
+		page = 1;
+		$.ajax({
+			type : 'POST',
+			url : (
+					'/admin/ajax/dialog/coupon_product_search.cm'
+			),
+			data : {product_list_type : product_list_type},
+			dataType : 'html',
+			async : false,
+			cache : false,
+			success : function(res){
+				var $html = $(res);
+
+				$.cocoaDialog.open({type : 'coupon_product_search', custom_popup : $html}, function(){
+					$product_search_input = $('#product_search_input');
+					$product_search_btn = $('#product_search_btn');
+					$product_search_list = $('#product_search_list');
+					$product_add_btn = $('#product_add_btn');
+					$product_more_btn = $('#product_more_btn');
+					getProductList(true, product_list_type);
+					$product_search_input.off('keyup.product_search_input').on('keyup.product_search_input', function(e){
+						if(e.which === 13){
+							getProductList(true, product_list_type);
+						}
+					});
+					$product_search_btn.off('click.product_search_btn').on('click.product_search_btn', function(){
+						getProductList(true, product_list_type);
+					});
+
+					$product_more_btn.off('click.product_more_btn').on('click.product_more_btn', function(){
+						getProductList(false, product_list_type);
+					});
+				});
+
+			},
+		});
+	}
+
+	function getProductList(list_clear, product_list_type = 'apply'){
+		if(list_clear){
+			page = 1;
+			$product_search_list.empty();
+		}
+		var search_data = $product_search_input.val();
+
+		const checked_product_list = product_list_type === 'apply' ? product_list : excluded_product_list;
+
+		$.ajax({
+			type : 'POST',
+			url : (
+					'/admin/ajax/coupon/get_product_list.cm'
+			),
+			data : {
+				checked_product_list : checked_product_list || [],
+				search_data : search_data,
+				page : page,
+			},
+			dataType : 'json',
+			async : false,
+			cache : false,
+			success : function(res){
+				$product_add_btn.off('click.product_add_btn').on('click.product_add_btn', function(){
+					if($product_search_list.find('._prodListCheck:checked').length > 0){
+						$product_search_list.find('._prodListCheck:checked').each(function(){
+							if(product_list_type === 'apply'){
+								addProductList($(this).val());
+							}else if(product_list_type === 'excluded'){
+								addExcludedProductList($(this).val());
+							}
+						});
+						if(product_list_type === 'apply'){
+							setProductList('product');
+						}else if(product_list_type === 'excluded'){
+							setProductList('excluded_product');
+						}
+						$.cocoaDialog.close();
+					}else{
+					}
+				});
+
+				$product_add_btn.hide();
+				$product_more_btn.hide();
+				$product_search_list.append(res.html);
+
+				if(product_list_type === 'apply'){
+					product_list_data = $.extend({}, product_list_data, res.data);
+				}else if(product_list_type === 'excluded'){
+					excluded_product_list_data = $.extend({}, excluded_product_list_data, res.data);
+				}
+
+				if(res.count > 0){
+					$product_add_btn.show();
+				}
+				if(res.is_more == 'Y'){
+					$product_more_btn.show();
+				}
+				page += 1;
+			},
+		});
+	}
+
+	/***
+	 * 발행쿠폰 리스트 가져오기
+	 * @param code
+	 * @param page
+	 */
+	function getIssueDataList(code, page){
+		is_issue_list_loading = true;
+		var search_text = $issue_search_input.val();
+		var search_type = $issue_search_type.val();
+		let new_search_type_and_text = search_type + search_text;
+		let page_for_request = page;
+		if(search_text != '' && search_type != '' && prev_search_get_issue_list_type_and_text !== new_search_type_and_text){
+			current_page = 1;
+			page_for_request = 1;
+			prev_search_get_issue_list_type_and_text = new_search_type_and_text;
+		}
+		$.ajax({
+			type : 'POST',
+			data : {code : code, page : page_for_request, search_type : search_type, search_text : search_text},
+			url : (
+					'/admin/ajax/coupon/get_issue_list.cm'
+			),
+			dataType : 'json',
+			async : true,
+			cache : false,
+			success : function(res){
+				if(res.msg === 'SUCCESS'){
+					is_issue_list_loading = false;
+					if(current_page == 1){
+						$('#coupon_issue_list_wrap').html(res.html);
+						$coupon_issue_list = $('.issue-list-wrap');
+						$coupon_issue_list.scroll(function(){
+							if(!is_issue_list_loading){
+								var $that = $(this);
+								if($that[0].scrollHeight - $that.scrollTop() <= $that.outerHeight()){
+									current_page++;
+									getIssueDataList(code, current_page);
+								}
+							}
+						});
+					}else{
+						$('.issue-list').append(res.html);
+					}
+					if(search_text == '' && search_type == ''){
+						current_page = current_page + 1;
+					}
+				}else if(res.msg === 'NO_MORE'){
+					$coupon_issue_list = $('#coupon_issue_list');
+					if($coupon_issue_list.length > 0){
+						$coupon_issue_list.off('scroll');
+					}
+				}else{
+					alert(res.msg);
+				}
+			},
+			done : function(res){
+				is_issue_list_loading = false;
+			},
+		});
+	}
+
+	function setProductList(type){
+		const meta = {
+			product : {
+				key_list : product_list,
+				list_data : product_list_data,
+				list_element : $product_apply_list,
+				element_item_key : 'product_',
+				on_delete_name : 'COUPON.delProductList',
+			},
+			excluded_product : {
+				key_list : excluded_product_list,
+				list_data : excluded_product_list_data,
+				list_element : $excluded_product_list,
+				element_item_key : 'excluded_product_',
+				on_delete_name : 'COUPON.delExcludedProductList',
+			},
+		};
+
+		const {key_list, list_data, list_element, element_item_key, on_delete_name} = meta[type];
+
+		if(isBlank(key_list) || !key_list.length || !meta[type]){
+			return false;
+		}
+
+		let list_html = '';
+
+		$.each(key_list, function(k, code){
+			let $obj = $('#' + element_item_key + code);
+
+			if($obj.length > 0){
+				return true;
+			}
+
+			const name = list_data[code].name;
+			const thumb = list_data[code].thumb;
+			const option = list_data[code].option;
+			const price_text = list_data[code].price_text;
+			const delete_click_handler = `${on_delete_name}('${code}')`;
+
+			list_html = '<table class=\'table\' id=\'' + element_item_key + code + '\'>';
+			list_html += '<tbody>';
+			list_html += '<tr>';
+			list_html += '<td class=\'vertical-top no-padding-left\'>';
+			list_html += '<div class=\'clearfix\'>';
+			list_html += '<img src=\'' + thumb + '\' width=\'50\' height=\'50\' class=\'item-thumb float_l\'>';
+			list_html += '<div class=\'float_l\' style=\'padding-left: 8px;\'>';
+			list_html += '<div>' + name + '</div>';
+			list_html += price_text;
+			list_html += '</div>';
+			list_html += '<span class=\'btn btn-sm-padding btn-default-bright text-12 float_r\' onclick=' + delete_click_handler + '> <a href=\'javascript:;\'>' + getLocalizeString('버튼_삭제', '', '삭제') + '</a> </span>';
+			list_html += '</div>';
+			list_html += '</td>';
+			list_html += '</tr>';
+			list_html += '</tbody>';
+			list_html += '</table>';
+
+			list_element.append(list_html);
+		});
+	}
+
+	function addProductList(code){
+		if($.inArray(code, product_list) > -1){
+			return false;
+		}
+		product_list.push(code);
+		header_ctl.change();
+	}
+
+	function addExcludedProductList(code){
+		if($.inArray(code, excluded_product_list) > -1){
+			return false;
+		}
+		excluded_product_list.push(code);
+		header_ctl.change();
+	}
+
+	var delProductList = function(code){
+		if(isBlank(code)){
+			return;
+		}
+		deleteArrayValue(product_list, code);
+
+		var $obj = $('#product_' + code);
+		$obj.remove();
+		header_ctl.change();
+	};
+
+	var delExcludedProductList = function(code){
+		if(isBlank(code)){
+			return;
+		}
+		deleteArrayValue(excluded_product_list, code);
+
+		var $obj = $('#excluded_product_' + code);
+		$obj.remove();
+		header_ctl.change();
+	};
+
+	var downloadCreateCouponIssueList = function(coupon_code, used){
+		if(typeof used != 'undefined' && used){
+			location.href = '/admin/ajax/coupon/download_create_coupon_issue_list.cm?only_used=Y&code=' + coupon_code;
+		}else{
+			location.href = '/admin/ajax/coupon/download_create_coupon_issue_list.cm?code=' + coupon_code;
+		}
+
+	};
+
+	var changeCouponTypeTarget = function(selector, type){
+		var type_target = '';
+		switch(selector){
+			case 'type_create_target' :
+				type_target = $('input[type=radio][name=' + selector + ']:checked').val();
+
+				const isSingleCoupon = $content.find('select[name=type_is_mult_coupon]').val() === 'N';
+				if(isSingleCoupon){
+					if(type === 'isMember'){ // 회원 + 비회원
+						$('input[name=is_duplication]').prop('checked', true);
+						$content.find('._member_limit_count').attr('disabled', true);
+					}else{
+						$('input[name=is_duplication]').prop('checked', false);
+						$content.find('._member_limit_count').attr('disabled', false);
+					}
+				}
+				break;
+			case 'type_down_target' :
+			case 'type_targeted_target' :
+			case 'type_auto_target' :
+				type_target = $('select[name=' + selector + '] option:selected').val();
+			default:
+				break;
+		}
+		if(typeof type_target != 'undefined'){
+			$('input[name=type_target]').val(type_target);
+		}
+	};
+
+	var runCouponExcelMake = function(type, option, callback){
+		var $dashboard_loader_sub = $('#dashboard_loader_sub');
+		let options = {};
+		if(option){
+			const {input} = option;
+			options['password'] = input.value;
+		}
+
+		$.ajax({
+			type : 'POST',
+			data : {'code' : type, ...options},
+			url : '/admin/ajax/coupon/request_excel_coupon_list.cm',
+			dataType : 'json',
+			cache : false,
+			beforeSend : function(){
+				$dashboard_loader_sub.show();
+			},
+			success : function(res){
+				var interval = setInterval(function(){
+					COUPON.loadExcelList(type, callback);
+					clearInterval(interval);
+				}, 2000);
+				$dashboard_loader_sub.hide();
+			},
+			error : function(res){
+				$dashboard_loader_sub.hide();
+				alert(res);
+			},
+		});
+	};
+
+	var loadExcelList = function(code, callback){
+		$.ajax({
+			type : 'GET',
+			url : (
+					'/admin/ajax/coupon/get_excel_coupon_list.cm'
+			),
+			dataType : 'json',
+			data : {'code' : code},
+			async : false,
+			cache : false,
+			success : function(res){
+				if(res.msg === 'SUCCESS'){
+					$('.modal_board_excel_download').find('._excel_empty_wrap').hide();
+
+					const $excelListBody = $('.modal_board_excel_download').find('#_excel_list_body');
+					$excelListBody.html(res.html);
+					typeof callback === 'function' && callback(Array.prototype.slice.call($excelListBody.get()[0].querySelectorAll('._download')));
+				}else{
+					$('.modal_board_excel_download').find('#_excel_list_body').empty();
+					$('.modal_board_excel_download').find('._excel_empty_wrap').show();
+				}
+			},
+		});
+	};
+
+	var changeDurationType = (type) => {
+		switch(type){
+			case 'validity_period':{
+				$content.find('._calendar_view').addClass('display-none');
+				$content.find('._type_auto._validity_period').removeClass('display-none');
+				break;
+			}
+			case 'date_range':
+			default :{
+				$content.find('._type_auto._validity_period').addClass('display-none');
+				$content.find('._calendar_view').removeClass('display-none');
+				// type가 none일 경우 기본값으로 duration_type date_range로 checked 설정
+				if(type === 'none'){
+					$content.find('input[name="duration_type"][value="date_range"]').prop('checked', true);
+				}
+				break;
+			}
+		}
+
+	};
+
+	// benefit_type에 따른 offer_type 텍스트 반환
+	function getOfferTypeText(benefit_type) {
+		switch(benefit_type) {
+			case 'delivery':
+				return 'free shipping';
+			case 'fix_price':
+				return 'fixed price purchase';
+			case 'discount':
+			default:
+				return 'discount purchase price';
+		}
+	}
+
+	return {
+		init : function(){
+			init();
+		},
+		listInit : function(base_url, callback){
+			listInit(base_url, callback);
+		},
+		addInit : function(data, _product_list_data, _excluded_product_list_data, is_copy_mode = false){
+			addInit(data, _product_list_data, _excluded_product_list_data, is_copy_mode);
+		},
+		changeCouponTypeTarget : function(coupon_type, type){
+			changeCouponTypeTarget(coupon_type, type);
+		},
+		updateCouponIssueFlag : function(code, flag){
+			updateCouponIssueFlag(code, flag);
+		},
+		downloadCreateCouponIssueList : function(coupon_code, used){
+			downloadCreateCouponIssueList(coupon_code, used);
+		},
+		delProductList : function(code){
+			delProductList(code);
+		},
+		delExcludedProductList : function(code){
+			delExcludedProductList(code);
+		},
+		runCouponExcelMake : function(type, option, callback){
+			runCouponExcelMake(type, option, callback);
+		},
+		loadExcelList : function(code, callback){
+			loadExcelList(code, callback);
+		},
+		openCouponSettingDialog : function(isTutorial){
+			openCouponSettingDialog(isTutorial);
+		},
+		setIsCouponSettingOpen : function(isOpen){
+			setIsCouponSettingOpen(isOpen);
+		},
+		showCouponSettingToast(contents){
+			showCouponSettingToast(contents);
+		},
+		setDesignCouponSetting(settings){
+			setDesignCouponSetting(settings);
+		},
+		toggleAlarmWrap : function(type){
+			toggleAlarmWrap(type);
+		},
+		changeUseAutoChangeGroup : function(value){
+			changeUseAutoChangeGroup(value);
+		},
+	};
+}();

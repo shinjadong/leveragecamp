@@ -1,0 +1,47 @@
+
+<!-- saved from url=(0027)https://pixel.itemscout.io/ -->
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+		<!-- Google tag (gtag.js) -->
+		<script async="" src="./js"></script>
+		<script>
+  			window.dataLayer = window.dataLayer || [];
+  			function gtag(){dataLayer.push(arguments);}
+  			// gtag('js', new Date());
+			// gtag('config', 'G-8BV38XT3V0', { 'send_page_view': false, 'cookie_flags': 'samesite=none;secure' });
+			var isGtagInit = false;	
+			window.addEventListener('message', receiveMessage);
+			function receiveMessage(e) {
+				if(e.data.source === 'itemscout-extension') {
+					if(e.data.message === 'setUserId') {
+						if(!isGtagInit) {
+						// console.log(e.data.data);
+							isGtagInit = true;
+							gtag('js', new Date());
+							gtag('config', 'G-8BV38XT3V0', { 'send_page_view': false, 'cookie_flags': 'samesite=none;secure', 'user_id': e.data.data });
+						}
+					} else {
+						if(!isGtagInit) {
+							isGtagInit = true;
+							gtag('js', new Date());
+							gtag('config', 'G-8BV38XT3V0', { 'send_page_view': false, 'cookie_flags': 'samesite=none;secure' });
+						}
+						gtag('event', e.data.message, e.data.data);
+					}
+					// console.log('chrome extension ', e.data);
+				}
+			}
+		</script>
+
+		<style>
+			body {
+				background-color: transparent;
+				margin: 0;
+			}
+		</style>
+	<style type="text/css">.resize-observer[data-v-8859cc6c]{position:absolute;top:0;left:0;z-index:-1;width:100%;height:100%;border:none;background-color:transparent;pointer-events:none;display:block;overflow:hidden;opacity:0}.resize-observer[data-v-8859cc6c] object{display:block;position:absolute;top:0;left:0;height:100%;width:100%;overflow:hidden;pointer-events:none;z-index:-1}</style><style type="text/css">x-vue-echarts{display:flex;flex-direction:column;width:100%;height:100%;min-width:0}
+.vue-echarts-inner{flex-grow:1;min-width:0;width:auto!important;height:auto!important}
+</style></head>
+	<body>
+	<!-- Cloudflare Pages Analytics --><script defer="" src="./beacon.min.js.다운로드" data-cf-beacon="{&quot;token&quot;: &quot;f603f66762434fad91609b25bf38fba2&quot;}"></script><!-- Cloudflare Pages Analytics -->
+
+</body></html>

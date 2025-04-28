@@ -1,0 +1,37 @@
+.spinner{
+    position: relative;
+}
+.spinner a.spin-up{
+    position: absolute;
+    right: 4px;
+    top: 0px;
+}
+.spinner a.spin-down{
+    position: absolute;
+    right: 4px;
+    top: 10px;
+}
+.spinner a.spin-up, .spinner a.spin-down {
+    height: 10px;
+    width: 10px;
+    font-size: 14px;
+    overflow: hidden;
+    display: block;
+    text-align: center;
+    text-decoration: none;
+    color: #999;
+    z-index: 4;
+}
+
+.spinner a.spin-up .zmdi-caret-up, .spinner a.spin-down .zmdi-caret-down {
+    position: relative;
+    top: -8px;
+    width: 10px;
+    height: 10px;
+    z-index: 99;
+
+}
+
+.spinner a.spin-up:hover, .spinner a.spin-down:hover {
+    color: #555
+}

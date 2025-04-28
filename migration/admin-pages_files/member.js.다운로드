@@ -1,0 +1,4558 @@
+const MEMBER_MANAGE = (function () {
+  let $form
+  let $member_agree_wrap
+  let header_ctl
+  let $fileupload_profile_img, $profile_img, $photo_tmp_idx
+  let member_code
+  let passwd_html_show_click = false
+  let $admin_group_list_wrap
+  let afterSavePhotoCallback;
+  const tw_address = {}
+
+  const init = function (type, code) {
+    member_code = code
+    $form = $('#dof')
+    $member_agree_wrap = $('#member_agree_wrap')
+    $fileupload_profile_img = $('#fileupload_profile_img')
+    $profile_img = $('#profile_img')
+    $photo_tmp_idx = $('#photo_tmp_idx')
+
+    header_ctl = new HEADER_CONTROL()
+    header_ctl.init()
+    if (type == 'add') {
+      header_ctl.addBtn('cancel', function () {
+        history.go(-1)
+      })
+      header_ctl.addBtn('add', function () {
+        submit('add')
+      })
+    } else {
+      header_ctl.addBtn('delete', function () {
+        adminMember.openDeleteMember(JSON.stringify([{ member_code, delete_old_auth_log: false }]))
+      })
+      header_ctl.addBtn('save', function () {
+        submit('save')
+      })
+    }
+    createEvent()
+    setUpload()
+
+    $admin_group_list_wrap = $('._admin_group_list_wrap')
+    if ($admin_group_list_wrap.find('input[type=checkbox]:checked').length > 0) {
+      $('._manager_info_wrap').show()
+    } else {
+      $('._manager_info_wrap').hide()
+    }
+    $admin_group_list_wrap.find('input[type=checkbox]').off('click').on('click', function () {
+      if ($admin_group_list_wrap.find('input[type=checkbox]:checked').length > 0) {
+        $('._manager_info_wrap').show()
+      } else {
+        $('._manager_info_wrap').hide()
+      }
+      header_ctl.change()
+    })
+  }
+
+  const setAfterSavePhotoCallback = function (callback) {
+	  afterSavePhotoCallback = callback;
+  }
+
+  const changeCountry = function (country, code) {
+    $form.find('._addr_form_wrap').hide()
+    if (country.trim() === '') {
+      return false
+    }
+    $.ajax({
+      url: '/admin/ajax/member/get_site_address_format.cm',
+      data: { country_code: country, unit_code: code },
+      type: 'POST',
+      dataType: 'json',
+      success: function (res) {
+        const format = res.format
+        switch (format) {
+          case 'KR':
+            $form.find('#kr_addr_form_wrap').show()
+            break
+          case 'TW':
+            $form.find('#tw_addr_form_wrap').show()
+            break
+          case 'VN':
+            $form.find('#vn_addr_form_wrap').show()
+            break
+          case 'HK':
+            $form.find('#hk_addr_form_wrap').show()
+            break
+          case '3':
+            $form.find('#jp_addr_form_wrap').show()
+            break
+          case '5':
+            $form.find('#en_addr_form_wrap').show()
+            break
+        }
+      }
+    })
+  }
+
+  const checkSubscribePeriodChange = function () {
+    let subscribe_check = false
+    $form.find('._subscribe_left_date').each(function () {
+      if ($(this).prop('disabled')) return false
+      if ($(this).val() != $(this).attr('placeholder')) {
+        subscribe_check = true
+        return false
+      }
+    })
+    return (!subscribe_check || confirm(getLocalizeString('설명_회원그룹이용권기간변경안내', '', '회원그룹 이용권 기간에 변경된 데이터가 있습니다.\n저장하시겠습니까?')))
+  }
+
+  var submit = function (type) {
+    const data = $form.serializeObject()
+    data.member_agree_info = $member_agree_wrap.serializeObject()
+    if (!checkSubscribePeriodChange()) return false
+    $.ajax({
+      type: 'POST',
+      data,
+      url: ('/admin/ajax/member/add.cm'),
+      dataType: 'json',
+      async: false,
+      cache: false,
+      success: function (res) {
+        if (res.msg == 'SUCCESS') {
+          header_ctl.save()
+          if (res.admin_group_fail === 'Y') {
+            alert(getLocalizeString('설명_운영진설정권한이없어운영진그룹은설정되지않았습니다', '', '운영진 설정 권한이 없어 운영진 그룹은 설정되지 않았습니다.'))
+          }
+	        mixpanel.track('complete_bo_member_list_add',{'site_code': SITE_CODE})
+          if (type == 'add') history.go(-1)
+          else location.reload()
+        } else { alert(res.msg) }
+      }
+    })
+  }
+
+  var createEvent = function () {
+    $form.find('input, textarea, select').off('change, keyup').on('change, keyup, blur', function () {
+      header_ctl.change()
+    })
+    $form.find('input[type=checkbox],input[type=radio],input[type=file],._file_remove').off('click').on('click', function () {
+      if ($(this).attr('name') == 'default_group[]' && $(this).data('subscribe') == 'Y') {
+        const group_idx = $(this).val()
+        const is_checked = $(this).prop('checked')
+        if (!is_checked && !confirm(getLocalizeString('설명_회원그룹이용권구매로지정된그룹제거시안내', '', '이 그룹은 회원그룹 이용권 구매로 자동 지정된 그룹입니다. \n그룹지정을 해제하고 나중에 다시 그룹을 지정하더라도 자동 그룹 해제일에 자동 해제가 되지 않게 됩니다.\n\n그룹 지정을 해제하시겠습니까?'))) {
+          return false
+        }
+
+        // 이용권 해제 예정이므로 기간 수정못하게 disabled 처리
+        $form.find('._subscribe_left_date').each(function () {
+          if (group_idx == $(this).data('group_idx')) {
+            $(this).prop('disabled', !is_checked)
+          }
+        })
+      }
+      header_ctl.change()
+    })
+    $form.find('select').change(function () {
+      header_ctl.change()
+    })
+
+    $form.find('._subscribe_left_date').on('keypress', function (e) {
+      $(this).val($(this).val().replace(/[^0-9]/g, ''))
+      return (e.keyCode >= 48 && e.keyCode <= 57)
+    })
+    $form.find('._subscribe_left_date').on('keyup', function (e) {
+      $(this).val($(this).val().replace(/[^0-9]/g, ''))
+      return (e.keyCode >= 48 && e.keyCode <= 57)
+    })
+
+    $member_agree_wrap.find('input[type=checkbox]').off('click').on('click', function () {
+      header_ctl.change()
+    })
+
+    const $admin_memo_chars_title = $('#admin_memo_chars_title')
+    const $admin_memo = $('#admin_memo')
+    const $btn_admin_memo = $('#btn_admin_memo')
+    if ($admin_memo.length > 0) {
+      autosize($admin_memo)
+      var pre_admin_memo = $admin_memo.val()
+      $admin_memo_chars_title.html(getByteLength(pre_admin_memo) + '/500')
+      $admin_memo.keyup(function (e) {
+        const content = $(this).val()
+        $admin_memo_chars_title.html(getByteLength(content) + '/500')
+      })
+    }
+    $btn_admin_memo.click(function () {
+      const memo = $admin_memo.val()
+      if (pre_admin_memo !== memo) {
+        pre_admin_memo = memo
+        const code = $form.find("input[name='code']").val()
+        if (code !== '') {
+          adminMember.updateAdminMemo(code, memo, function (res) {
+            if (res.msg !== 'SUCCESS') alert(res.msg)
+            else location.reload()
+          })
+        }
+      }
+    })
+
+    $('#create_recommend_code_btn').click(function () {
+      let is_create_recommend_code = false
+      if (!is_create_recommend_code) {
+        const member_code = $(this).data('member-code')
+
+        $.ajax({
+          type: 'POST',
+          data: { member_code },
+          url: ('/admin/ajax/member/create_recommend_code.cm'),
+          dataType: 'json',
+          async: true,
+          cache: false,
+          success: function (res) {
+            is_create_recommend_code = true
+            if (res.msg === 'SUCCESS') {
+              $('._recommend_code_wrap').html(res.recommend_code)
+              $('._recommend_tmp_input').val(res.recommend_code)
+              $('._recommend_create_set').addClass('hide')
+              $('._recommend_set').removeClass('hide')
+            } else {
+              alert(res.msg)
+            }
+          }
+        })
+      }
+    })
+  }
+
+  var setUpload = function () {
+    $fileupload_profile_img.setUploadImage({
+      url: '/admin/ajax/upload_image.cm',
+      formData: { temp: 'Y', target: 'member' }
+    }, function (res, data) {
+      $.each(data, function (e, tmp) {
+        if (tmp.tmp_idx > 0) {
+          header_ctl.change();
+        }
+        if (tmp.url != '') {
+          $profile_img.attr('src', CDN_UPLOAD_URL + tmp.url);
+          $photo_tmp_idx.val(tmp.tmp_idx);
+
+	        if (afterSavePhotoCallback) {
+		        afterSavePhotoCallback();
+	        }
+        } else {
+          alert(tmp.error);
+        }
+      })
+    })
+  }
+
+  const changeJoinTypeForm = function () {
+    const join_type_code = $form.find('select[name=join_type_select]').val()
+    $form.find('input[name=join_type_code]').val(join_type_code)
+    $.ajax({
+      type: 'POST',
+      data: { join_type_code },
+      url: ('/admin/ajax/member/change_join_type_form.cm'),
+      dataType: 'json',
+      async: true,
+      cache: false,
+      success: function (res) {
+        if (res.msg === 'SUCCESS') {
+          $form.find('._type_form_wrap').html(res.html)
+          setDaumZipcode()
+          changeCountry('', UNIT_CODE)
+        } else {
+          alert(res.msg)
+        }
+      }
+    })
+  }
+
+  var setDaumZipcode = function () {
+    const join_addr = new ZIPCODE_DAUM()
+    let address = ''
+    let splitAddress = ''
+    let building = ''
+    let street = ''
+    let city = ''
+    let state = ''
+
+    join_addr.init({
+      addr_container: $('#join_addr_container'),
+      addr_pop: $('#join_addr_container ._add_list'),
+      post_code: $('#join_addr_postcode'),
+      addr: $('#join_addr'),
+      onShow: function () {
+        $('#join_addr_container').css({ top: -50 + 'px' })
+        $('#join_addr_detail').parent().css({ top: -50 + 'px' })
+      },
+      onComplete: function (data) {
+        $('#join_addr_detail').focus()
+        address = data.addressEnglish
+        if (address == 'undefined') address = data.jibunAddressEnglish
+        splitAddress = address.split(',')
+        if (splitAddress.length > 5) {
+          building = splitAddress[0]
+          street = splitAddress[1]
+          city = splitAddress[2]
+          state = splitAddress[3] + ' ' + splitAddress[4]
+        } else {
+          building = splitAddress[0]
+          street = splitAddress[1]
+          city = splitAddress[2]
+          state = splitAddress[3]
+        }
+        $("input[name='addr_building']").val(building)
+        $("input[name='addr_street']").val(street)
+        $("input[name='addr_city']").val(city)
+        $("input[name='addr_state']").val(state)
+        $("input[name='addr_zipcode']").val(data.zonecode)
+      },
+      onClose: function () {
+        $('#join_addr_detail').parent().css({ top: 0 + 'px' })
+      },
+      height: '470'
+    })
+  }
+
+  const openChangePasswordMyModal = function (idx) {
+    $.ajax({
+      type: 'GET',
+      url: '/admin/ajax/change_password_my_modal.cm',
+      dataType: 'json',
+      data: { idx },
+      async: true,
+      cache: false,
+      success: function (data) {
+        if (data.msg === 'SUCCESS') {
+          const $html = $(data.html)
+          $.cocoaDialog.open({
+            type: 'site_change_password',
+            custom_popup: $html
+          })
+        } else {
+          alert(data.msg)
+        }
+      }
+    })
+  }
+
+  return {
+    init: function (type, code) {
+      init(type, code)
+    },
+    changeCountry: function (country, code) {
+      changeCountry(country, code)
+    },
+    showPasswdHtml: function () {
+      if (!passwd_html_show_click) {
+        passwd_html_show_click = true
+        let placeholder_text = getLocalizeString('설명_비밀번호', '', '비밀번호');
+        if (member_code !== '') {
+          placeholder_text = getLocalizeString('설명_비밀번호변경시에만입력', '', '비밀번호 변경시에만 입력해주세요');
+        }
+        const passwd_html = "<input type='password'  autocomplete='off' name='passwd' id='user_password' class='form-control' placeholder='" + placeholder_text + "'>";
+        $('#password_wrap .col-md-9').append(passwd_html);
+
+        $form.find('input[name="passwd"]').off('change, keyup').on('change, keyup, blur', function () {
+          header_ctl.change();
+        })
+      }
+    },
+    changeJoinTypeForm: function () {
+      changeJoinTypeForm();
+    },
+    setDaumZipcode: function () {
+      setDaumZipcode();
+    },
+    openChangePasswordMyModal: function (idx) {
+      openChangePasswordMyModal(idx);
+    },
+    setAfterSavePhotoCallback: function(callback) {
+	    setAfterSavePhotoCallback(callback);
+    },
+	  changeData : function(){
+		  header_ctl.change();
+	  }
+  }
+}())
+
+const MEMBER_GROUP = (function () {
+  let modal_type = 'list'
+  let current_member_code, base_url, managers_setting_permission
+  let $group_list, $drop_group_list, $drop_shopping_group_list, $check_drop_group_list,
+    $check_drop_shopping_group_list, $no_group_cnt
+  let group_list_item_tmp, drop_group_list_tmp
+
+  const group_item_html_class = '_group_item'
+  const group_list_data = new DATA()
+  let prev_group_type
+  let prev_drop_group_type
+
+  const setGroupMemberCount = function (data) {
+    group_list_data.data[data.code].member_cnt = data.member_cnt
+  }
+
+  const addGroupList = function (data) {
+    data.idx = parseInt(data.idx)
+    group_list_data.add(data.code, data)
+    addGroupListHtml(data)
+  }
+
+  const setCurrentMemberCode = function (code) {
+    current_member_code = code
+  }
+
+  const updateGroupList = function (code, data) {
+    group_list_data.add(code, data)
+    resetGroupListHtml()
+  }
+
+  const modifyGroupList = function (type, data) {
+    if (type == 'delete') {
+      group_list_data.remove(data.code)
+    } else {
+      if (type == 'add') {
+        data.idx = parseInt(data.idx)
+      }
+      group_list_data.add(data.code, data)
+    }
+  }
+
+  const addDropGroupList = function (data) {
+    let concede_script = ''
+    const group_type = data.group_type
+    let edit_script = "adminMember.openGroupForm('" + data.idx + "');"
+    let li_id = 'group_item_' + data.code
+
+    switch (data.group_type) {
+      case 'shopping':
+      case 'activity':
+        concede_script = "MEMBER_GROUP.concedeChangeSpecialGroup('" + group_type + "',$(this),'" + data.idx + "')"
+        if (data.code == group_type) {
+          edit_script = 'CONFIG_SHOPPING_GROUP.openShoppingGroupDefaultForm();'
+          li_id = group_type + '_group_default'
+        }
+        break
+      case 'admin':
+      case 'shop_in_shop':
+        if (managers_setting_permission) {
+          concede_script = "MEMBER_GROUP.concedeToggleGroup($(this),'" + data.idx + "')"
+        } else {
+          concede_script = "alert(getLocalizeString('설명_운영진그룹설정권한이없습니다', '', '운영진 그룹 설정 권한이 없습니다.'))"
+        }
+        break
+      case 'member':
+        concede_script = "MEMBER_GROUP.concedeToggleGroup($(this),'" + data.idx + "')"
+        break
+    }
+    $drop_group_list = $('._drop_group_list')
+    $drop_shopping_group_list = $('._drop_shopping_group_list')
+    const $drop_list = (data.group_type == 'shopping') ? $drop_shopping_group_list : $drop_group_list
+    const tmp_data = {
+      id: li_id,
+      class: (data.is_default ? 'default_' : '') + group_type + ' ' + (current_member_code == data.code ? 'active checked ' + group_item_html_class : group_item_html_class),
+      code: data.code,
+      href: base_url + 'member_group=' + data.code,
+      title: group_type === 'member' ? data.title : data.group_type_name + ' - ' + data.title,
+      group_type: data.group_type_name,
+      cnt: data.member_cnt > 0 ? parseInt(data.member_cnt) : '',
+      edit_script: edit_script + 'return false;'
+    }
+
+    if (!prev_drop_group_type || prev_drop_group_type !== group_type) {
+      prev_drop_group_type = group_type
+      var use_div = true
+    } else {
+      var use_div = false
+    }
+
+    $drop_list.each(function () {
+      const group_data = $(this).data('groups')
+      let drop_tmp_data = {
+        class: (data.is_default ? 'default_' : '') + group_type + ' ' + ($.inArray(data.idx, group_data) !== -1 ? 'active checked ' + group_item_html_class : group_item_html_class),
+        idx: data.idx,
+        concede_script
+      }
+
+      drop_tmp_data = $.extend(tmp_data, drop_tmp_data)
+      const $drop_group_list_html = $(getTemplateConvert(drop_group_list_tmp, drop_tmp_data)).data(data)
+
+      appendGroupHtml($(this), $drop_group_list_html, group_type, data.is_default, use_div)
+    })
+  }
+
+  var addGroupListHtml = function (data) {
+    let concede_script = ''
+    const group_type = data.group_type
+    let edit_script = "adminMember.openGroupForm('" + data.idx + "');"
+    let li_id = 'group_item_' + data.code
+    switch (data.group_type) {
+      case 'shopping':
+      case 'activity':
+        concede_script = "MEMBER_GROUP.concedeChangeSpecialGroup('" + group_type + "',$(this),'" + data.idx + "')"
+        if (data.code == group_type) {
+          edit_script = 'CONFIG_SHOPPING_GROUP.openShoppingGroupDefaultForm();'
+          li_id = group_type + '_group_default'
+        }
+        break
+      case 'admin':
+      case 'shop_in_shop':
+        if (managers_setting_permission) {
+          concede_script = "MEMBER_GROUP.concedeToggleGroup($(this),'" + data.idx + "')"
+        } else {
+          concede_script = "alert(getLocalizeString('설명_운영진그룹설정권한이없습니다', '', '운영진 그룹 설정 권한이 없습니다.'))"
+        }
+        break
+      case 'member':
+        concede_script = "MEMBER_GROUP.concedeToggleGroup($(this),'" + data.idx + "')"
+        break
+    }
+
+    const tmp_data = {
+      id: li_id,
+      class: (data.is_default ? 'default_' : '') + group_type + ' ' + (current_member_code == data.code ? 'active checked ' + group_item_html_class : group_item_html_class),
+      code: data.code,
+      href: base_url + 'member_group=' + data.code,
+      title: group_type === 'member' ? data.title : data.group_type_name + ' - ' + data.title,
+      group_type: data.group_type_name,
+      cnt: data.member_cnt > 0 ? parseInt(data.member_cnt) : '',
+      edit_script: edit_script + 'return false;'
+    }
+
+    if (data.member_cnt === '9999+') {
+      tmp_data.cnt = '9999+'
+    }
+
+    if (!prev_group_type || prev_group_type !== group_type) {
+      prev_group_type = group_type
+      var use_div = true
+    } else {
+      var use_div = false
+    }
+    const $group_list_html = $(getTemplateConvert(group_list_item_tmp, tmp_data)).data(data)
+    appendGroupHtml($group_list, $group_list_html, group_type, data.is_default, use_div)
+
+    const $drop_list = (data.group_type == 'shopping') ? $drop_shopping_group_list : $drop_group_list
+    $drop_list.each(function () {
+      const group_data = $(this).data('groups')
+      let drop_tmp_data = {
+        class: (data.is_default ? 'default_' : '') + group_type + ' ' + ($.inArray(data.idx, group_data) !== -1 ? 'active checked ' + group_item_html_class : group_item_html_class),
+        idx: data.idx,
+        concede_script
+      }
+
+      drop_tmp_data = $.extend(tmp_data, drop_tmp_data)
+      const $drop_group_list_html = $(getTemplateConvert(drop_group_list_tmp, drop_tmp_data)).data(data)
+      appendGroupHtml($(this), $drop_group_list_html, group_type, data.is_default, use_div)
+    })
+
+    const $check_drop_list = (data.group_type == 'shopping') ? $check_drop_shopping_group_list : $check_drop_group_list
+    const check_group = $check_drop_list.data('groups')
+    let check_drop_tmp_data = {
+      class: (data.is_default ? 'default_' : '') + group_type + ' ' + ($.inArray(data.idx, check_group) !== -1 ? 'active checked ' + group_item_html_class : group_item_html_class),
+      idx: data.idx,
+      concede_script
+    }
+    check_drop_tmp_data = $.extend(tmp_data, check_drop_tmp_data)
+    const $check_drop_group_list_html = $(getTemplateConvert(drop_group_list_tmp, check_drop_tmp_data)).data(data)
+    appendGroupHtml($check_drop_list, $check_drop_group_list_html, group_type, data.is_default, use_div)
+  }
+
+  // 관리자페이지 - 그룹 HTML 추가할 위치 지정
+  var appendGroupHtml = function ($obj, $html, _group_type, is_default, use_divider) {
+    const group_type = (is_default ? 'default_' : '') + _group_type
+    use_divider = (use_divider === true)
+    const $divider = '<li class="divider ' + group_item_html_class + '"></li>'
+    if ($obj.find('.' + group_type).length === 0) {
+      let next_element = []
+      switch (group_type) {
+        case 'default_member' :
+          next_element.push('.member')
+          break
+        case 'member':
+          next_element.push('.admin')
+          break
+        case 'admin':
+          next_element.push('.shopping')
+          break
+        case 'shopping':
+          break
+      }
+      next_element = next_element.length > 0 ? next_element.join(',') : ''
+      const is_first = ($obj.find('.' + group_item_html_class).length === 0)
+
+      if (next_element === '' || $obj.find(next_element).length === 0) {
+        if (use_divider && !is_first) $obj.append($divider)
+        $obj.append($html)
+      } else {
+        $obj.find(next_element).first().before($html)
+        if (use_divider) $obj.find(next_element).first().before($divider)
+      }
+    } else {
+      $obj.find('.' + group_type + ':last').after($html)
+    }
+  }
+
+  var resetGroupListHtml = function () {
+    prev_group_type = ''
+    prev_drop_group_type = ''
+    $('.' + group_item_html_class).remove()
+    $.each(group_list_data.data, function (code, data) {
+      addGroupListHtml(data)
+    })
+  }
+
+  const init = function (code, url, permission, type) {
+    current_member_code = code
+    base_url = url
+    managers_setting_permission = permission
+    $group_list = $('#group_list')
+    $no_group_cnt = $('._no_group_cnt')
+    modal_type = type
+    group_list_item_tmp = '<li class="{class}" id="{id}" onclick="MEMBER_DATA.changeUrl(null, null, \'{href}\', \'group\', \'{code}\', \'1\')"><a href="#"><span id="group_item_title_{code}">{title}</span> <small id="group_item_count_{code}" class="margin-left-lg text-bold opacity-75">{cnt}</small><button onclick="{edit_script}" class="pull-right btn btn-flat no-padding hover-visible"><i class="zmdi zmdi-settings"></i></button></a></li>'
+    drop_group_list_tmp = '<li class="{class}"><a href="javascript:;" data-idx="{idx}" onclick="{concede_script}">{title}</a></li>'
+
+    $drop_group_list = $('._drop_group_list')
+    $drop_shopping_group_list = $('._drop_shopping_group_list')
+
+    $drop_group_list.each(function () {
+      // 기본 그룹
+      let _new_d = []
+      $.each($(this).data('groups').toString().split(','), function (e, v) {
+        v = v == '' ? 0 : parseInt(v)
+        if (v > 0) { _new_d.push(v) }
+      })
+      $(this).data('groups', _new_d)
+
+      // 이용권 그룹
+      _new_d = []
+      $.each($(this).data('subscribe_groups').toString().split(','), function (e, v) {
+        v = v == '' ? 0 : parseInt(v)
+        if (v > 0) { _new_d.push(v) }
+      })
+      $(this).data('subscribe_groups', _new_d)
+    })
+
+    $drop_shopping_group_list.each(function () {
+      let member_data = '' + $(this).data('groups')
+      member_data = member_data.split(',')
+      const _new_d = []
+      $.each(member_data, function (e, v) {
+        v = v == '' ? 0 : parseInt(v)
+        _new_d.push(v)
+      })
+      $(this).data('groups', _new_d)
+    })
+
+    $check_drop_group_list = $('._check_drop_group_list')
+    $check_drop_group_list.data('member', [])
+    $check_drop_group_list.data('groups', [])
+
+    $check_drop_shopping_group_list = $('._check_drop_shopping_group_list')
+    $check_drop_shopping_group_list.data('member', [])
+    $check_drop_shopping_group_list.data('groups', [])
+  }
+
+  const openGroupForm = function (idx, group_type) {
+    $.ajax({
+      type: 'POST',
+      data: { idx, type: modal_type, group_type },
+      url: ('/admin/ajax/config/membership/group_form.cm'),
+      dataType: 'json',
+      async: false,
+      cache: false,
+      success: function (result) {
+        if (result.msg == 'SUCCESS') {
+          $.cocoaDialog.open({ type: 'admin_group_form', custom_popup: result.html, width: 550 })
+        } else {
+          alert(result.msg)
+        }
+      }
+    })
+  }
+
+  const concedeChangeSpecialGroup = function (type, obj, idx) {
+    const $list = obj.closest('._drop_shopping_group_list, ._check_drop_shopping_group_list')
+    const member_idx = $list.data('member')
+
+    let _idx = -1
+
+    if (!$.isArray(member_idx)) {
+      if ($list.find('.' + type + '.active.checked').length == 0) return false
+      _idx = $list.find('.' + type + '.active.checked').data('idx')
+    }
+
+    if (idx != _idx) {
+      idx = parseInt(idx)
+
+      let old_data = {}
+      $.ajax({
+        type: 'POST',
+        data: { group_type: type, member_idx, new_group_code: idx },
+        url: '/admin/ajax/member/group_concede_proc.cm',
+        dataType: 'json',
+        async: true,
+        cache: false,
+        success: function (result) {
+          if (result.msg == 'SUCCESS') {
+            const new_data = group_list_data.get(obj.parent().data('code'))
+            const _group = new_data.title
+
+            if ($.isArray(member_idx)) {
+              $.each(member_idx, function (e, v) {
+                $('._drop_shopping_group_btn_' + v).html(_group)
+                $('._drop_shopping_group_list_' + v).data('groups', [idx])
+
+                $.each(group_list_data.data, function (index, item) {
+                  if (item.idx === idx) {
+                    old_data = item
+                    return false
+                  }
+                })
+
+                // old_data = group_list_data.get($('._drop_shopping_group_list_' + v).find('.active.checked').data('code'));
+                old_data.member_cnt -= 1
+                new_data.member_cnt = new_data.member_cnt == '' ? 0 : new_data.member_cnt
+                new_data.member_cnt += 1
+              })
+            } else {
+              $('._drop_shopping_group_btn_' + member_idx).html(_group)
+              $('._drop_shopping_group_list_' + member_idx).data('groups', [idx])
+
+              // old_data = group_list_data.get($('._drop_shopping_group_list_' + member_idx).find('.active.checked').data('code'));
+              $.each(group_list_data.data, function (index, item) {
+                if (item.idx === idx) {
+                  old_data = item
+                  return false
+                }
+              })
+              old_data.member_cnt -= 1
+              new_data.member_cnt = new_data.member_cnt == '' ? 0 : new_data.member_cnt
+              new_data.member_cnt += 1
+            }
+
+            resetGroupListHtml()
+            MEMBER_DATA.renderGroupCount(idx)
+          } else {
+            alert(result.msg)
+          }
+        }
+      })
+
+      $list.data('groups', [idx])
+    }
+  }
+
+  const concedeToggleGroup = function (obj, idx) {
+    idx = parseInt(idx)
+    const $list = obj.closest('._drop_group_list, ._check_drop_group_list')
+    let member_item_group_data = $list.data('groups')
+    let member_item_subscribe_data = $list.data('subscribe_groups')
+    const member_idx = $list.data('member')
+
+    const $item = obj.parent()
+    const item_data = $item.data()
+    const _old_data = group_list_data.get(item_data.code)
+
+    // 다중 선택 시
+    if ($.isArray(member_idx)) {
+      // 변경될 데이터 만들어 주기
+      if ($.inArray(idx, member_item_group_data) !== -1) { // 제거
+        member_item_group_data = deleteArrayValue(member_item_group_data, idx)
+      } else { // 추가
+        member_item_group_data.push(idx)
+      }
+
+      // 회원그룹이용권 구매 회원이 포함되어있는지 체크
+      let subscribe_group_exist_check = 0
+      $.each(member_idx, function (e, v) {
+        const $drop_list = $('._drop_group_list_' + v)
+        const _member_item_subscribe_data = $drop_list.data('subscribe_groups')
+        if (_member_item_subscribe_data.length > 0) { // 이용권 구매해서 포함된 회원이 존재 시
+          subscribe_group_exist_check++
+        }
+      })
+      if ((subscribe_group_exist_check != 0) &&
+				!confirm(getLocalizeString('설명_회원그룹이용권구매회원포함안내', subscribe_group_exist_check, '해당 그룹에 회원그룹 이용권 구매로 자동 지정된 그룹 사용자가 %1명 이상 포함되어 있습니다. 그룹 지정을 해제하고 나중에 다시 그룹을 지정하더라도 자동 그룹 해제일에 자동 해제가 되지 않게됩니다.\n\n그룹 지정을 해제하시겠습니까?'))) {
+        return false
+      }
+      $list.data('groups', member_item_group_data)
+
+      $.each(member_idx, function (e, v) {
+        const $drop_list = $('._drop_group_list_' + v)
+        const _member_item_group_data = $drop_list.data('groups')
+        $.each(member_item_group_data, function (_e, _v) {
+          if ($.inArray(_v, _member_item_group_data) === -1) { // 없으면 추가
+            _old_data.member_cnt = _old_data.member_cnt == '' ? 0 : _old_data.member_cnt
+            _old_data.member_cnt = 1 + parseInt(_old_data.member_cnt)
+          }
+        })
+        $.each(_member_item_group_data, function (_e, _v) {
+          if ($.inArray(_v, member_item_group_data) === -1) { // 없으면 제거
+            let __old_data = false
+            $.each(group_list_data.data, function (__e, __v) {
+              if (__v.idx == _v) {
+                __old_data = group_list_data.get(__e)
+                return false
+              }
+            })
+            if (__old_data !== false) {
+              __old_data.member_cnt = parseInt(__old_data.member_cnt) - 1
+            }
+          }
+        })
+        $drop_list.data('groups', member_item_group_data.concat())
+        $drop_list.data('subscribe_groups', [])
+      })
+    }
+    // 대상 회원 수 한명
+    else {
+      if ($.inArray(idx, member_item_group_data) !== -1) { // 제거
+        if ($.inArray(idx, member_item_subscribe_data) !== -1) { // 제거
+          if (!confirm(getLocalizeString('설명_회원그룹이용권구매로지정된그룹제거시안내', '', '이 그룹은 회원그룹 이용권 구매로 자동 지정된 그룹입니다. \n그룹지정을 해제하고 나중에 다시 그룹을 지정하더라도 자동 그룹 해제일에 자동 해제가 되지 않게 됩니다.\n\n그룹 지정을 해제하시겠습니까?'))) {
+            return false
+          }
+          member_item_subscribe_data = deleteArrayValue(member_item_subscribe_data, idx)
+          $list.data('subscribe_groups', member_item_subscribe_data)
+        }
+
+        member_item_group_data = deleteArrayValue(member_item_group_data, idx)
+        $list.data('groups', member_item_group_data)
+        _old_data.member_cnt = parseInt(_old_data.member_cnt) - 1
+      } else { // 추가
+        if (typeof member_item_group_data !== 'object') {
+          member_item_group_data = member_item_group_data.split(',')
+        }
+
+        member_item_group_data.push(idx)
+        $list.data('groups', member_item_group_data)
+        _old_data.member_cnt = _old_data.member_cnt == '' ? 0 : _old_data.member_cnt
+        _old_data.member_cnt = 1 + parseInt(_old_data.member_cnt)
+      }
+    }
+
+    $.ajax({
+      type: 'POST',
+      data: { member_idx, new_group_code: member_item_group_data },
+      url: ('/admin/ajax/member/group_concede_proc.cm'),
+      dataType: 'json',
+      async: true,
+      cache: false,
+      success: function (result) {
+        if (result.msg == 'SUCCESS') {
+          const check_member = $check_drop_group_list.data('member')
+          checkMember(check_member)
+
+          let main_group_title = ''
+          let i = 0
+          if ($.isArray(member_idx)) {
+            $.each(member_idx, function (e, v) {
+              let main_group_title = ''
+              let i = 0
+              const $drop_list = $('._drop_group_list_' + v)
+              const _member_item_group_data = $drop_list.data('groups')
+              $.each(group_list_data.data, function (code, data) {
+                data.idx = parseInt(data.idx)
+                if ($.inArray(data.idx, _member_item_group_data) !== -1) {
+                  if (i == 0) { main_group_title = data.title }
+                  i++
+                }
+              })
+              let _group = ''
+              if (i == 0) {
+                _group = getLocalizeString('설명_그룹없음', '', '그룹없음')
+              } else {
+                _group = main_group_title + '<span class="text-primary">' + (i > 1 ? '+' + (i - 1) : '') + '</span>'
+              }
+
+              calculateNoGroup($drop_list, i)
+              $('._drop_group_btn_' + v).html(_group)
+            })
+          } else {
+            $.each(group_list_data.data, function (code, data) {
+              if ($.inArray(data.idx, member_item_group_data) !== -1) {
+                if (i == 0) { main_group_title = data.title }
+                i++
+              }
+            })
+            let _group = ''
+            if (i == 0) {
+              _group = getLocalizeString('설명_그룹없음', '', '그룹없음')
+            } else {
+              _group = main_group_title + '<span class="text-primary">' + (i > 1 ? '+' + (i - 1) : '') + '</span>'
+            }
+
+            calculateNoGroup($list, i)
+
+            $('._drop_group_btn_' + member_idx).html(_group)
+          }
+
+          resetGroupListHtml()
+          MEMBER_DATA.renderGroupCount(member_item_group_data)
+        } else {
+          alert(result.msg)
+        }
+      }
+    })
+  }
+
+  var calculateNoGroup = function (obj, cnt) {
+    let _no_group_cnt = $no_group_cnt.text().trim()
+    if (_no_group_cnt === '9999+') {
+      return
+    }
+    _no_group_cnt = _no_group_cnt == '' ? 0 : _no_group_cnt
+    _no_group_cnt = parseInt(_no_group_cnt)
+    if (cnt == 0) {
+      if (obj.data('nogroup') == 'N') {
+        obj.data('nogroup', 'Y')
+        _no_group_cnt = _no_group_cnt + 1
+        $no_group_cnt.text(_no_group_cnt)
+      }
+    } else {
+      if (obj.data('nogroup') == 'Y') {
+        obj.data('nogroup', 'N')
+        _no_group_cnt = _no_group_cnt - 1
+        $no_group_cnt.text(_no_group_cnt)
+      }
+    }
+  }
+
+  var checkMember = function (idxs) {
+    const $list = $('._drop_group_list_' + idxs[0])
+
+    if ($list.length > 0) {
+      var res = $list.data('groups').concat()
+      $.each(idxs, function (e, v) {
+        res = array_intersect(res, $('._drop_group_list_' + v).data('groups').concat())
+      })
+      var result = []
+      $.each(res, function (e, v) {
+        v = v == '' ? 0 : parseInt(v)
+        if (v > 0) { result.push(v) }
+      })
+      $check_drop_group_list.data('groups', result)
+      $check_drop_group_list.data('member', idxs)
+    }
+
+    // 쇼핑등급
+    const $shopping_list = $('._drop_shopping_group_list_' + idxs[0])
+    if ($shopping_list.length > 0) {
+      var res = $shopping_list.data('groups').concat()
+      $.each(idxs, function (e, v) {
+        res = array_intersect(res, $('._drop_shopping_group_list_' + v).data('groups').concat())
+      })
+      var result = []
+      $.each(res, function (e, v) {
+        v = v == '' ? 0 : parseInt(v)
+        result.push(v)
+      })
+      $check_drop_shopping_group_list.data('member', idxs)
+      $check_drop_shopping_group_list.data('groups', result)
+    }
+
+    resetGroupListHtml()
+  }
+
+  const getGroupList = function () {
+    return group_list_data
+  }
+
+  const changeJoinTypeDefaultGroup = function (type_code, group_code) {
+    $.ajax({
+      type: 'POST',
+      data: { type_code, group_code },
+      url: ('/admin/ajax/member/update_join_type_default_group.cm'),
+      dataType: 'json',
+      async: true,
+      cache: false,
+      success: function (result) {
+        if (result.msg !== 'SUCCESS') {
+          alert(result.msg)
+        }
+      }
+    })
+  }
+
+  const setGroupCheck = function (idx) {
+    const check_member = $('._drop_group_list_' + idx).data('groups')
+    checkMember(check_member)
+  }
+
+  const setShoppingGroupCheck = function (idx) {
+    const check_member = $('._drop_shopping_group_list_' + idx).data('groups')
+    checkMember(check_member)
+  }
+
+  return {
+    init: function (code, base_url, permission, type) {
+      init(code, base_url, permission, type)
+    },
+    getModalType: function () {
+      return modal_type
+    },
+    addGroupList: function (data) {
+      addGroupList(data)
+    },
+    updateGroupList: function (code, data) {
+      updateGroupList(code, data)
+    },
+    modifyGroupList: function (type, data) {
+      modifyGroupList(type, data)
+    },
+    openGroupForm: function (idx, type) {
+      openGroupForm(idx, type)
+    },
+    concedeChangeSpecialGroup: function (type, obj, idx) {
+      concedeChangeSpecialGroup(type, obj, idx)
+    },
+    concedeToggleGroup: function (obj, idx) {
+      concedeToggleGroup(obj, idx)
+    },
+    checkMember: function (idxs) {
+      checkMember(idxs)
+    },
+    getGroupList: function () {
+      return getGroupList()
+    },
+    changeJoinTypeDefaultGroup: function (type_code, group_code) {
+      return changeJoinTypeDefaultGroup(type_code, group_code)
+    },
+    addDropGroupList: function (data) {
+      addDropGroupList(data)
+    },
+    setGroupMemberCount: function (data) {
+      setGroupMemberCount(data)
+    },
+    setGroupCheck: function (idx) {
+      setGroupCheck(idx)
+    },
+    setShoppingGroupCheck: function (idx) {
+      setShoppingGroupCheck(idx)
+    },
+    setCheck: function () {
+      setCheck()
+    },
+    resetGroupListHtml: function () {
+      resetGroupListHtml()
+    },
+    setPrevDropGroupType: function (type) {
+      prev_drop_group_type = type
+    },
+    setCurrentMemberCode: function (code) {
+      setCurrentMemberCode(code)
+    }
+  }
+}())
+
+const MEMBER_GROUP_SETTING_MODAL = (function () {
+  let $form, $group_benefit, $member_group_benefit
+  let group_list = {}
+  let current_group_type = 'member'
+  let current_unit_code = ''
+
+  const init = function (unit_code, code, type) {
+    $form = $('#groupf')
+    $group_benefit = $('#group_benefit_setting')
+    $member_group_benefit = $('#member_group_benefit_setting')
+    setGroupListData(code)
+
+    current_unit_code = unit_code
+    addEvent()
+
+    if (typeof type !== 'undefined' && type != '') {
+      changeGroupType(type)
+    }
+  }
+  var addEvent = function () {
+    $form.find('#group_type').on('change', function () {
+      changeGroupType($(this).val())
+    })
+
+    // 자동등급 조건 설정
+    $form.find('#shopping_auto_grouping_not_used').on('change', function () {
+      changeUseAutoGrouping($(this).prop('checked'))
+    })
+
+    $form.find('.auto_grouping_flag').on('blur', function () {
+      changeFlagAmount($(this))
+    })
+
+    // 구매혜택 설정부분
+    $form.find('.benefit_type_radio').find(':radio').on('change', function () {
+      changeBenefitType()
+    })
+    $group_benefit.find('.group_benefit select').on('change', function () {
+      const is_percent = ($(this).val() == 'percent')
+      $(this).parents('.input-group').find('.benefit_maximum').toggle(is_percent)
+      $(this).parents('.input-group').find('.benefit_maximum').find('input').prop('disabled', !is_percent)
+
+      // 변경시 혜택 값 초기화
+      const $amount = $(this).parents('.input-group').find('._benefit_money_format:nth-child(1)')
+      $amount.val(0)
+      makeMoneyFormat($amount, !is_percent)
+    })
+
+    $group_benefit.find('input[type="text"]').on('blur', function () {
+      const v = parseFloat($(this).val())
+      if (v === 0) $(this).val(v)
+    })
+
+    $form.find('.auto_grouping_flag').each(function () {
+      makeMoneyFormat($(this), true)
+    })
+    $form.find('._benefit_money_format').each(function () {
+      let use_format = true
+      if ($(this).hasClass('_benefit_amount')) {
+        use_format = ($(this).parents('.input-group').find('select').val() == 'price')
+      }
+      makeMoneyFormat($(this), use_format)
+    })
+  }
+
+  var makeMoneyFormat = function ($obj, use_format) {
+    $obj.unbind('keydown.format keyup.format')
+    if (use_format) {
+      set_money_format($obj, $obj.data('decimal-count'), $obj.data('decimal-char'), $obj.data('thousand-char'))
+    }
+  }
+
+  // 현재 그룹 데이터 기준 조건 리스트 생성
+  var setGroupListData = function (cd) {
+    const group_list_data = MEMBER_GROUP.getGroupList()
+    group_list = { shopping: [], activity: [] }
+
+    const auto_set_group_list = ['shopping', 'activity']
+    $.each(group_list_data.data, function (code, data) {
+      if (cd === code) {
+        current_group_type = data.group_type
+        return true
+      }
+      if (auto_set_group_list.indexOf(data.group_type) < 0) return true
+      let auto_grouping_data = data.auto_grouping_data
+
+      switch (data.group_type) {
+        case 'shopping':
+          if (data.use_auto_change != 'Y') break
+          for (const key in auto_grouping_data) {
+            if (typeof group_list[data.group_type][key] === 'undefined') {
+              group_list[data.group_type][key] = []
+            }
+            auto_grouping_data[key] = parseFloat(auto_grouping_data[key])
+            group_list[data.group_type][key].push(auto_grouping_data[key])
+          }
+          break
+        case 'activity':
+          auto_grouping_data = parseFloat(auto_grouping_data)
+          group_list[data.group_type].push(auto_grouping_data)
+          break
+      }
+    })
+  }
+
+  // 그룹 유형 변경 시
+  var changeGroupType = function (type) {
+    current_group_type = type
+    $form.find('.group_setting').hide()
+    $form.find('.group_setting.' + type + '_group_setting').show()
+    switch (type) {
+      case 'member':
+      case 'admin':
+        // changeBenefitType();
+        break
+      case 'shopping':
+        changeBenefitType()
+        changeUseAutoGrouping($form.find('#shopping_auto_grouping_not_used').prop('checked'))
+        break
+      case 'activity':
+        $group_benefit.hide()
+        break
+    }
+  }
+
+  // 쇼핑설정 - 자동 등급 사용 안함
+  var changeUseAutoGrouping = function (b) {
+    $('#auto_grouping_setting').toggle(!b)
+  }
+
+  // 자동등급 조건 금액 변경시 on blur 처리
+  var changeFlagAmount = function ($obj) {
+    if ($obj.length <= 0) return false
+
+    let v = parseFloat($obj.val())
+    v = (isNaN(v)) ? 0 : v
+    $obj.val(v)
+    const code = $obj.data('code')
+
+    $form.find('.help_group_flag_setting_' + code).hide()
+
+    if (v < 0) {
+      $form.find('.help_group_flag_setting_' + $obj.data('code')).html(getLocalizeString('설명_자동등급조건은0보다큰값을입력해야합니다', '', '자동 등급 조건은 0보다 큰 값을 입력해야 합니다.')).show()
+      return 'MINUS'
+    } else {
+      // 이미 등록된 조건인지 체크
+      if (typeof group_list[current_group_type] !== 'undefined') {
+        let auto_grouping_list = group_list[current_group_type]
+        if (typeof code !== 'undefined' && typeof auto_grouping_list[code] !== 'undefined') {
+          auto_grouping_list = auto_grouping_list[code]
+        }
+
+        if (auto_grouping_list.indexOf(v) > -1) {
+          $form.find('.help_group_flag_setting_' + code).html(getLocalizeString('설명_다른그룹에서설정한조건과동일한조건은입력할수없습니다', '', '다른 그룹에서 설정한 조건과 동일한 조건은 입력할 수 없습니다.')).show()
+          return 'EXIST'
+        }
+      }
+    }
+
+    return true
+  }
+
+  // ( 글로벌 사이트 ) 일반회원그룹 구매혜택 탭 변경시
+  const changeMemberGroupBenefitTarget = function (obj) {
+    const $obj = $(obj)
+    const unit_code = $obj.data('code')
+    current_unit_code = unit_code
+    $('#member_group_benefit_setting_tab').find('li.active').removeClass('active')
+    $obj.parent('li').addClass('active')
+    $member_group_benefit.find('._member-group-benefit-tab-content').addClass('hidden')
+    $member_group_benefit.find('._member-group-benefit-tab-content#member_group_benefit_' + unit_code).removeClass('hidden')
+  }
+
+  // ( 글로벌 사이트 ) 구매혜택 탭 변경시
+  const changeBenefitTarget = function (obj) {
+    const $obj = $(obj)
+    const unit_code = $obj.data('code')
+    current_unit_code = unit_code
+
+    $('#benefit_setting_tab').find('li.active').removeClass('active')
+    $obj.parent('li').addClass('active')
+
+    $group_benefit.find('.tab-content').addClass('hidden')
+    $group_benefit.find('.tab-content#group_benefit_' + unit_code).removeClass('hidden')
+  }
+
+  // 그룹 혜택 변경 시
+  var changeBenefitType = function () {
+    $group_benefit.show()
+    const $group_benefit_obj = $group_benefit.find('#group_benefit_' + current_unit_code)
+    $group_benefit_obj.find('.group_benefit').hide()
+
+    const benefit_type = $group_benefit_obj.find(':radio:checked').val()
+    switch (benefit_type) {
+      case 'dc':
+      case 'point':
+        $group_benefit_obj.find('.group_benefit.benefit_type_' + benefit_type).show()
+        break
+      case 'all':
+        $group_benefit_obj.find('.group_benefit').show()
+        break
+    }
+  }
+
+  // 구몌혜택 체크
+  const checkBenefit = function () {
+    if (current_group_type != 'shopping') return true	// 쇼핑그룹만 사용함
+    if ($group_benefit.length <= 0) return true // 쇼핑 사용 안함 등의 이슈로 혜택이 없을 경우
+
+    let $target
+    const benefit_type = $group_benefit.find(':radio[name=benefit_type]:checked').val()
+    switch (benefit_type) {
+      case 'dc':
+      case 'point':
+        $target = $group_benefit.find('.group_benefit.benefit_type_' + benefit_type)
+        break
+      case 'all':
+        $target = $group_benefit.find('.group_benefit')
+        break
+    }
+
+    if (typeof $target === 'undefined') return true
+
+    let benefit_error = false
+    $target.find('input').each(function () {
+      if ($(this).prop('disabled')) return true
+      const amt = parseFloat($(this).val())
+      if (isNaN(amt) || amt <= 0) {
+        benefit_error = true
+      }
+    })
+    return !benefit_error
+  }
+
+  // 유효성 검사
+  const checkValidateForm = function () {
+    if (current_group_type == 'activity' || current_group_type == 'shopping') {
+      let check = true
+      const $obj = $form.find('.' + current_group_type + '_group_setting').find('.auto_grouping_flag')
+      if ($obj.length > 0) {
+        $obj.each(function () {
+          if (check !== true) return true
+          check = changeFlagAmount($(this))
+        })
+      }
+      if (check !== true) {
+        switch (check) {
+          case 'MINUS':
+            alert(getLocalizeString('설명_자동등급조건은0보다큰값을입력해야합니다', '', '자동 등급 조건은 0보다 큰 값을 입력해야 합니다.'))
+            break
+          case 'EXIST':
+            alert(getLocalizeString('설명_자동등급조건이다른등급과동일합니다자동등급조건을수정해주세요', '', '자동 등급 조건이 다른 등급과 동일합니다. 자동 등급 조건을 수정해 주세요.'))
+            break
+        }
+        return false
+      }
+    }
+    if (!checkBenefit()) {
+      alert(getLocalizeString('설명_할인금액및최대할인금액은0보다큰값을입력해야합니다', '', '할인 금액 및 최대 할인 금액은 0보다 큰 값을 입력해야 합니다.'))
+      return false
+    }
+    return true
+  }
+
+  // 그룹설정저장
+  const saveGroupForm = function () {
+    if (!checkValidateForm()) {
+      return false
+    }
+    const data = $form.serializeObject()
+    const admin_group_setting = $('.admin_group_setting').find('input').serialize()
+    data.modal_type = MEMBER_GROUP.getModalType()
+    if (admin_group_setting == '' && data.group_type == 'admin') {
+      if (confirm(getLocalizeString('설명_1개이상의권한이부여되지않은그룹은일반그룹으로전환됩니다', '', '1개 이상의 권한이 부여되지 않은 그룹은 일반그룹으로 전환되며\n해당 운영 그룹에만 속한 사용자들은 일반회원으로 전환됩니다.\n그룹 권한을 저장하시겠습니까?'))) {
+        $.ajax({
+          type: 'POST',
+          data,
+          url: ('/admin/ajax/config/membership/group_form_proc.cm'),
+          dataType: 'json',
+          async: false,
+          cache: false,
+          success: function (result) {
+            if (result.msg == 'SUCCESS') {
+              location.reload()
+            } else {
+              if (result.msg == 'VERSION ERROR') {
+                if (confirm(LOCALIZE_ADMIN.설명_업그레이드페이지로이동할까요())) {
+                  window.location.href = '/admin/payment?mode=detail&type=upgrade'
+                }
+              } else {
+                alert(result.msg)
+              }
+            }
+          }
+        })
+      } else {
+        return false
+      }
+    } else {
+      $.ajax({
+        type: 'POST',
+        data,
+        url: ('/admin/ajax/config/membership/group_form_proc.cm'),
+        dataType: 'json',
+        async: false,
+        cache: false,
+        success: function (result) {
+          if (result.msg == 'SUCCESS') {
+            location.reload()
+          } else {
+            if (result.msg == 'VERSION ERROR') {
+              if (confirm(LOCALIZE_ADMIN.설명_업그레이드페이지로이동할까요())) {
+                window.location.href = '/admin/payment?mode=detail&type=upgrade'
+              }
+            } else {
+              alert(result.msg)
+            }
+          }
+        }
+      })
+    }
+  }
+
+  // 종료시 콜백
+  const saveCallBack = function (result) {
+    const modal_type = MEMBER_GROUP.getModalType()
+    result.data.idx = parseInt(result.data.idx)
+    if (modal_type == 'config') {
+      // 쇼핑이면 쇼핑으로 붙게끔 해야함
+      MEMBER_GROUP.modifyGroupList(result.mode, result.data)
+      if (typeof CONFIG_MEMBERSHIP !== 'undefined') {
+        CONFIG_MEMBERSHIP.addGroupHtml(result.data)
+      }
+    } else {
+      if (result.mode == 'add') {
+        MEMBER_GROUP.addGroupList(result.data)
+        window.doznutadmin.AppForm.initialize()
+      } else if (result.mode == 'update') {
+        MEMBER_GROUP.updateGroupList(result.data.code, result.data)
+      }
+    }
+  }
+
+  return {
+    init: function (unit_code, code, type) {
+      init(unit_code, code, type)
+    },
+    changeBenefitTarget: function (obj) {
+      changeBenefitTarget(obj)
+    },
+    changeMemberGroupBenefitTarget: function (obj) {
+	  changeMemberGroupBenefitTarget(obj)
+    },
+    saveGroupForm: function () {
+      saveGroupForm()
+    }
+  }
+}())
+
+const MEMBER_EXCEL = (function () {
+  let $member_multi_add_status, $msg_section
+  let $group_multi_add_status
+
+	const resultExcelDownload = (status, result_idx) => {
+	  if(status === '완료'){
+		  return location.href = `/admin/ajax/member/download_excel_member_in_group_result.cm?result_idx=${result_idx}`
+	  } else if (status === '진행중') {
+		  alert('결과 엑셀 생성중 입니다.');
+	  } else {
+		  alert('결과 엑셀 생성이 실패 하였습니다');
+	  }
+	}
+	const loadGroupExcelResult = function () {
+      const modalMultiMemberAdd = $('.modal_multi_member_add')
+      const excelResultTable = modalMultiMemberAdd.find('#_excel_list_body');
+      const excelEmptyWrap = modalMultiMemberAdd.find('._excel_empty_wrap');
+		$.ajax({
+			type: 'GET',
+			url: ('/admin/ajax/member/get_excel_member_in_group_list.cm'),
+			dataType: 'json',
+			success: function (res){
+				if(res.length !== 0){
+					excelEmptyWrap.hide();
+                    excelResultTable.empty();
+					for(let i = 0; i < res.list.length; i++){
+						const excelResult = res.list[i];
+						const row = $('<tr>');
+						const excelDownloadResultText = excelResult.status === '완료' ? '다운로드' : '생성중';
+
+						row.append(`<td style="overflow: hidden; max-width: 114px; white-space: nowrap; text-overflow: ellipsis; word-break: break-all">${excelResult.group_name}</td>`);
+						row.append(`<td>${excelResult.request_datetime}</td>`);
+						row.append(`<td class="text-center">${excelResult.status}</td>`);
+						row.append(`
+					        <th class="download_btn text-right make_complete text-primary"
+					         style="padding-right: 20px;" 
+					         onclick="MEMBER_EXCEL.resultExcelDownload('${excelResult.status}',${excelResult.result_idx})">
+					          ${excelResult.status === '실패' ? '실패' : excelDownloadResultText}</th>
+					        <th class="text-right" style="padding-right: 20px;">
+					          <span class="text-danger" style="cursor: pointer;"
+					            onclick="MEMBER_EXCEL.deleteGroupExcel(${excelResult.result_idx})">삭제</span>
+					        </th>
+						`);
+						excelResultTable.append(row); // 새로운 <tr> 요소 추가
+					}
+				}else{
+					excelEmptyWrap.show();
+				}
+			},
+			error: function (xhr, status, error) {
+				console.log("AJAX 요청 실패:", error);
+			}
+		})
+	}
+
+  const groupExcelUploadInit = function (groupCode) {
+    $group_multi_add_status = $('#group_multi_add_status')
+    const $group_code = groupCode
+    $group_multi_add_status.fileupload({
+      url: '/admin/ajax/excel_upload.cm',
+      formData: { target_code: 'bulk_member_group_excel' },
+      dataType: 'json',
+      singleFileUploads: true,
+      limitMultiFileUploads: 1,
+      start: function (e, data) {
+        $group_multi_add_status.addClass('file-loading')
+      },
+      done: function (e, data) {
+        const res_data = data.result
+        $.ajax({
+          type: 'POST',
+          data: {
+            file_name: res_data.file_name,
+            group_code: $group_code
+          },
+          url: ('/admin/ajax/member/upload_excel_member_group.cm'),
+          dataType: 'json',
+          success: function (res) {
+            if (res.msg === 'SUCCESS') {
+              var interval = setInterval(function () {
+                alert('사용자 그룹 일괄 등록 요청이 완료되었습니다.');
+                $group_multi_add_status.removeClass('file-loading');
+				loadGroupExcelResult()
+				// drawExcelUploadResult()
+                clearInterval(interval)
+              }, 2000)
+            } else {
+              alert(res.msg)
+              $group_multi_add_status.removeClass('file-loading')
+            }
+          }
+        })
+      }
+    })
+  }
+
+
+  const memberExcelUploadInit = function () {
+    $member_multi_add_status = $('#member_multi_add_status')
+    $member_multi_add_status.fileupload({
+      url: '/admin/ajax/excel_upload.cm',
+      formData: { target_code: 'multi_member_excel' },
+      dataType: 'json',
+      singleFileUploads: true,
+      limitMultiFileUploads: 1,
+      start: function () {
+        $member_multi_add_status.addClass('file-loading');
+      },
+      done: function (e, data) {
+        const res_data = data.result
+        $.ajax({
+          type: 'POST',
+          data: {
+            file_name: res_data.file_name
+          },
+          url: ('/admin/ajax/member/upload_excel_member.cm'),
+          dataType: 'json',
+          success: function (res) {
+            if (res.msg === 'SUCCESS') {
+              var interval = setInterval(function () {
+                $member_multi_add_status.removeClass('file-loading')
+	            drawExcelUploadResult()
+                clearInterval(interval)
+              }, 2000)
+            } else {
+              alert(res.msg)
+              $member_multi_add_status.removeClass('file-loading')
+            }
+          }
+        })
+      },
+      fail: function () {
+
+      }
+    })
+  }
+
+  const drawExcelUploadResult = function () {
+    $msg_section = $('#msg_section')
+    $.ajax({
+      type: 'POST',
+      url: ('/admin/ajax/member/get_excel_member_upload.cm'),
+      dataType: 'json',
+      async: false,
+      cache: false,
+      success: function (res) {
+        if (res.msg === 'SUCCESS') {
+          $msg_section.html(res.html).show()
+        }
+      },
+      error: function (request, status, error) {
+        // alert("code:"+request.status+"\n"+"message:"+request.responseText+"\n"+"error:"+error);
+      }
+
+    })
+  }
+
+  const showBulkGroupAdd = function (groupCode) {
+    // 사용자 그룹 일괄 등록 모달
+    $.cocoaDialog.close()
+    $.ajax({
+      type: 'POST',
+      data: {
+        'group_code' : groupCode
+      },
+      url: ('/admin/ajax/open_group_batch.cm'),
+      dataType: 'html',
+      async: true,
+      cache: false,
+      success: function (html) {
+        const $html = $(html)
+        $.cocoaDialog.open({ type: 'multi_member_add', custom_popup: $html })
+      }
+    })
+  }
+
+  const showMultiMemberAdd = function () {
+    $.cocoaDialog.close()
+    $.ajax({
+      type: 'POST',
+      data: {},
+      url: ('/admin/ajax/open_member_batch.cm'),
+      dataType: 'html',
+      async: true,
+      cache: false,
+      success: function (html) {
+        const $html = $(html)
+        $.cocoaDialog.open({ type: 'multi_member_add', custom_popup: $html })
+      }
+    })
+  }
+
+  const openModalMemberExcelDownload = function (member_group) {
+    $.ajax({
+      type: 'POST',
+      url: ('/admin/ajax/member/open_download_excel_member_list.cm'),
+      data: { member_group },
+      dataType: 'json',
+      async: false,
+      cache: false,
+      success: function (res) {
+        if (res.msg === 'SUCCESS') {
+          $.cocoaDialog.open({ type: 'admin_member_excel_download', custom_popup: res.html, width: 550 })
+        } else {
+          alert(res.msg)
+        }
+      }
+    })
+  }
+
+  const loadExcelList = function () {
+    $.ajax({
+      type: 'POST',
+      url: ('/admin/ajax/member/get_excel_member_list.cm'),
+      dataType: 'json',
+      async: false,
+      cache: false,
+      success: function (res) {
+        if (res.msg == 'SUCCESS') {
+          $('.modal_admin_member_excel_download').find('._excel_empty_wrap').hide()
+          $('.modal_admin_member_excel_download').find('#_excel_list_body').html(res.html)
+        } else {
+          $('.modal_admin_member_excel_download').find('#_excel_list_body').empty()
+          $('.modal_admin_member_excel_download').find('._excel_empty_wrap').show()
+        }
+      }
+    })
+  }
+
+  const runMemberExcelMake = function (member_group) {
+    const $dashboard_loader_sub = $('#dashboard_loader_sub')
+    const member_privacy = $('#member_privacy').is(':checked')
+    const join_type = $('#join_type').val()
+
+    $.ajax({
+      type: 'POST',
+      url: '/admin/ajax/member/request_excel_member_list.cm',
+      dataType: 'json',
+      data: { member_group, member_privacy, join_type },
+      cache: false,
+      beforeSend: function () {
+        $dashboard_loader_sub.show()
+      },
+      success: function (res) {
+        if (res.msg === 'SUCCESS') {
+          var interval = setInterval(function () {
+            $dashboard_loader_sub.hide()
+            loadExcelList()
+
+            let all_download = true
+            $('#_excel_list_body .download_btn').each(function (key, el) {
+	            if ($(el).hasClass('make_progress')) {
+                all_download = false
+              }
+            })
+
+	          if (all_download) {
+              clearInterval(interval)
+            }
+          }, 2000)
+        } else {
+          alert(res.msg)
+          $dashboard_loader_sub.hide()
+        }
+      },
+      error: function (res) {
+        $dashboard_loader_sub.hide()
+      }
+    })
+  }
+  const deleteGroupExcel = function (idx) {
+	  if (confirm(getLocalizeString('설명_삭제하시겠습니까', '', '삭제하시겠습니까?'))) {
+		  $.ajax({
+			  type: 'POST',
+			  data: { result_idx : idx },
+			  url: ('/admin/ajax/member/delete_excel_group.cm'),
+			  dataType: 'json',
+			  async: false,
+			  cache: false,
+			  success: function (res) {
+				  if (res.msg === 'SUCCESS') {
+					  loadGroupExcelResult();
+				  } else {
+					  alert(res.msg)
+				  }
+			  }
+		  })
+	  }
+  }
+
+  const deleteGroupUploadExcel = function (idx) {
+    if (confirm(getLocalizeString('설명_삭제하시겠습니까', '', '삭제하시겠습니까?'))) {
+      $.ajax({
+        type: 'POST',
+        data: { idx },
+        url: ('/admin/ajax/member/delete_excel_member.cm'),
+        dataType: 'json',
+        async: false,
+        cache: false,
+        success: function (res) {
+          if (res.msg == 'SUCCESS') {
+            loadExcelList()
+          } else {
+            alert(res.msg)
+          }
+        }
+      })
+    }
+  }
+  const deleteMemberExcel = function (idx) {
+    if (confirm(getLocalizeString('설명_삭제하시겠습니까', '', '삭제하시겠습니까?'))) {
+      $.ajax({
+        type: 'POST',
+        data: { idx },
+        url: ('/admin/ajax/member/delete_excel_member.cm'),
+        dataType: 'json',
+        async: false,
+        cache: false,
+        success: function (res) {
+          if (res.msg == 'SUCCESS') {
+            loadExcelList()
+          } else {
+            alert(res.msg)
+          }
+        }
+      })
+    }
+  }
+
+  const deleteMemberUploadExcel = function (idx) {
+    if (confirm(getLocalizeString('설명_삭제하시겠습니까', '', '삭제하시겠습니까?'))) {
+      $.ajax({
+        type: 'POST',
+        data: { idx },
+        url: ('/admin/ajax/member/delete_excel_upload_member.cm'),
+        dataType: 'json',
+        async: false,
+        cache: false,
+        success: function (res) {
+          if (res.msg == 'SUCCESS') {
+            drawExcelUploadResult()
+          } else {
+            alert(res.msg)
+          }
+        }
+      })
+    }
+  }
+
+  return {
+    init: function () {
+      init()
+    },
+    memberExcelUploadInit: function () {
+      memberExcelUploadInit()
+    },
+	  resultExcelDownload: function (status, result_idx) {
+		resultExcelDownload(status, result_idx)
+	  },
+    groupExcelUploadInit: function (groupCode) {
+	  groupExcelUploadInit(groupCode)
+    },
+    deleteGroupExcel: function (idx) {
+        deleteGroupExcel(idx)
+    },
+	  loadGroupExcelResult: function () {
+		loadGroupExcelResult()
+	  },
+    drawExcelUploadResult: function () {
+      drawExcelUploadResult()
+    },
+    showBulkGroupAdd: function (groupCode) {
+      showBulkGroupAdd(groupCode)
+    },
+    showMultiMemberAdd: function () {
+      showMultiMemberAdd()
+    },
+    openModalMemberExcelDownload: function (member_group) {
+      openModalMemberExcelDownload(member_group)
+    },
+    loadExcelList: function () {
+      loadExcelList()
+    },
+    runMemberExcelMake: function (member_group) {
+      runMemberExcelMake(member_group)
+    },
+    deleteMemberExcel: function (idx) {
+      deleteMemberExcel(idx)
+    },
+    deleteMemberUploadExcel: function (idx) {
+      deleteMemberUploadExcel(idx)
+    }
+  }
+}())
+
+const remove_group_list = []
+let is_writing = false
+let is_join_confirm = false
+var adminMember = {
+  openGroupForm: function (idx) {
+    $.ajax({
+      type: 'POST',
+      data: { idx },
+      url: ('/admin/ajax/config/membership/group_form.cm'),
+      dataType: 'json',
+      async: false,
+      cache: false,
+      success: function (result) {
+        if (result.msg == 'SUCCESS') {
+          $.cocoaDialog.open({ type: 'admin_group_form', custom_popup: result.html, width: 550 })
+        } else {
+          alert(result.msg)
+        }
+      }
+    })
+  },
+  deleteGroupForm: function (idx) {
+    $.ajax({
+      type: 'POST',
+      data: { mode: 'delete', idx },
+      url: ('/admin/ajax/config/membership/group_form_proc.cm'),
+      dataType: 'json',
+      async: false,
+      cache: false,
+      success: function (result) {
+        if (result.msg == 'SUCCESS') {
+          // 성공시 전체 사용자로 리다이렉트
+          window.location.href = '/admin/member/list';
+        }
+        else alert(result.msg)
+      }
+    })
+  },
+  addGroupForm: function () {
+    const f = $('#groupf')
+    const data = f.serializeObject()
+    $.ajax({
+      type: 'POST',
+      data,
+      url: ('/admin/ajax/config/membership/group_form_proc.cm'),
+      dataType: 'json',
+      async: false,
+      cache: false,
+      success: function (result) {
+        if (result.msg == 'SUCCESS') {
+          if (result.mode == 'add') {
+            const base_url = $('#new_group_btn').data('base_url')
+            const html = '<li id="group_item_' + result.code + '"><a href=\"' + base_url + '&member_group=' + result.code + '\">' + result.title + '<small class=\"margin-left-lg text-bold opacity-75\"></small></a></li>'
+            $('#new_group_btn').before(html)
+
+            window.doznutadmin.AppForm.initialize()
+          } else if (result.mode == 'update') {
+            $('#group_item_title_' + result.code).html(result.title)
+            $('#group_hidden_item_title_' + result.code).html(result.title)
+            $('#group_hidden_list_title').html(result.title)
+          }
+          $.cocoaDialog.close()
+        } else {
+          if (result.msg == 'VERSION ERROR') {
+            if (confirm(LOCALIZE_ADMIN.설명_업그레이드페이지로이동할까요())) {
+              window.location.href = '/admin/payment?mode=detail&type=upgrade'
+            }
+          } else {
+            alert(result.msg)
+          }
+        }
+      }
+    })
+  },
+	 openDeleteMemberGroup: function (code, group_code) {
+    $.ajax({
+      type: 'POST',
+      data: { code, group_code },
+      url: ('/admin/ajax/member/delete_member_group.cm'),
+      dataType: 'json',
+      async: false,
+      cache: false,
+      success: function (res) {
+        if (res.msg == 'SUCCESS') {
+          $.cocoaDialog.open({
+            type: 'admin',
+            custom_popup: res.html,
+            width: 550,
+            reopen: true,
+            use_enter: true,
+            hide_event: function () {
+              $(window).unbind('keydown')
+            }
+          })
+        } else {
+          alert(res.msg)
+        }
+      }
+    })
+  },
+  openUpdateMemberConfirm: function (code, type) {
+    $.ajax({
+      type: 'POST',
+      data: { code, type },
+      url: ('/admin/ajax/member/update_member_confirm.cm'),
+      dataType: 'html',
+      async: false,
+      cache: false,
+      success: function (html) {
+        $.cocoaDialog.open({ type: 'admin', custom_popup: html })
+      }
+    })
+  },
+  UpdateMemberConfirm: function (code, type) {
+    if (is_join_confirm) return
+    is_join_confirm = true
+    $.ajax({
+      type: 'POST',
+      data: { code },
+      url: ('/admin/ajax/member/update_member_confirm_proc.cm'),
+      dataType: 'json',
+      async: false,
+      cache: false,
+      success: function (result) {
+        if (result.msg == 'SUCCESS') {
+          location.reload()
+        } else {
+          alert(result.msg)
+          is_join_confirm = false
+        }
+      }
+    })
+  },
+  openDeleteMember: function (data) {
+    $.ajax({
+      type: 'POST',
+      data: { data },
+      url: ('/admin/ajax/member/delete_member.cm'),
+      dataType: 'html',
+      async: false,
+      cache: false,
+      success: function (html) {
+        $.cocoaDialog.open({ type: 'admin', custom_popup: html })
+      },
+      error: function () {
+        alert(getLocalizeString('설명_잠시후다시시도해주세요', '', '잠시 후 다시 시도해주세요.'))
+      }
+    })
+  },
+  openDeleteInactiveMember: function (code) {
+    $.ajax({
+      type: 'POST',
+      data: { code: JSON.stringify(code) },
+      url: ('/admin/ajax/member/delete_inactive_member.cm'),
+      dataType: 'html',
+      async: false,
+      cache: false,
+      success: function (html) {
+        $.cocoaDialog.open({ type: 'admin', custom_popup: html })
+      }
+    })
+  },
+  openInactiveMember: function (code) {
+    $.ajax({
+      type: 'POST',
+      data: { code: JSON.stringify(code) },
+      url: ('/admin/ajax/member/inactive_member.cm'),
+      dataType: 'html',
+      async: false,
+      cache: false,
+      success: function (html) {
+        $.cocoaDialog.open({ type: 'admin', custom_popup: html })
+      }
+    })
+  },
+  UpdateMemberAutoGroupingSetting: function (code, use) {
+    $.ajax({
+      type: 'POST',
+      data: { code, use },
+      url: '/admin/ajax/member/member_autogrouping_setting_proc.cm',
+      dataType: 'json',
+      async: false,
+      cache: false,
+      success: function (result) {
+        if (result.msg == 'SUCCESS') {
+          location.reload()
+        } else { alert(result.msg) }
+      }
+    })
+  },
+  deleteMember: function (data) {
+    $.ajax({
+      type: 'POST',
+      data: { data },
+      url: ('/admin/ajax/member/delete_member_proc.cm'),
+      dataType: 'json',
+      async: false,
+      cache: false,
+      success: function (result) {
+        if (result.msg == 'SUCCESS') {
+	        mixpanel.track('complete_bo_member_list_delete_item', {'count': JSON.parse(data).length,'site_code': SITE_CODE});
+          location.reload()
+        } else { alert(result.msg) }
+      }
+    })
+  },
+  deleteInactiveMember: function (code) {
+    $.ajax({
+      type: 'POST',
+      data: { mode: 'delete', code },
+      url: ('/admin/ajax/member/delete_inactive_member_proc.cm'),
+      dataType: 'json',
+      async: false,
+      cache: false,
+      success: function (result) {
+        if (result.msg == 'SUCCESS') {
+          location.reload()
+        } else { alert(result.msg) }
+      }
+    })
+  },
+  updateInactiveMember: function (code) {
+    $.ajax({
+      type: 'POST',
+      data: { code },
+      url: ('/admin/ajax/member/inactive_member_proc.cm'),
+      dataType: 'json',
+      async: false,
+      cache: false,
+      success: function (result) {
+        if (result.msg == 'SUCCESS') {
+          location.reload()
+        } else { alert(result.msg) }
+      }
+    })
+  },
+  deleteMemberAuth: function (code) {
+    if (!confirm(getLocalizeString('설명_본인인증해제', '', '본인인증을 해제하면 해당 회원의 실명 확인 및 중복 가입 방지, 아이디·패스워드 찾기, 성인 여부 확인 기능이 동작하지 않는 점 주의해주세요. 본인인증 해제를 진행 하시겠습니까?'))) {
+      return false
+    }
+    $.ajax({
+      type: 'POST',
+      data: { code },
+      url: ('/admin/ajax/member/delete_member_auth.cm'),
+      dataType: 'json',
+      async: false,
+      cache: false,
+      success: function (result) {
+        alert(result.msg)
+        location.reload()
+      }
+    })
+  },
+  openBlockMember: function (idx) {
+    $.ajax({
+      type: 'POST',
+      data: { idx },
+      url: ('/admin/member/list/block_member.cm'),
+      dataType: 'html',
+      async: false,
+      cache: false,
+      success: function (html) {
+        $.cocoaDialog.open({ type: 'admin', custom_popup: html })
+      }
+    })
+  },
+  blockMember: function (idx) {
+    $.ajax({
+      type: 'POST',
+      data: { idx },
+      url: ('/admin/member/list/block_member_proc.cm'),
+      dataType: 'json',
+      async: false,
+      cache: false,
+      success: function (result) {
+        if (result.msg == 'SUCCESS') { $('#member_item_' + idx).addClass('block') } else { alert(result.msg) }
+      }
+    })
+  },
+  openMemberPushForm: function (member_code_list) {
+    $.ajax({
+      type: 'POST',
+      data: { member_code_list },
+      url: ('/admin/member/send/member_push_form.cm'),
+      dataType: 'html',
+      async: false,
+      cache: false,
+      success: function (html) {
+        $.cocoaDialog.open({ type: 'admin', custom_popup: html, width: 600 })
+      }
+    })
+  },
+  openMemberSmsForm: function (member_code_list, order_code) {
+    $.ajax({
+      type: 'POST',
+      data: { member_code_list, order_code },
+      url: ('/admin/member/send/member_sms_form.cm'),
+      dataType: 'html',
+      async: false,
+      cache: false,
+      success: function (html) {
+        $.cocoaDialog.open({ type: 'admin', custom_popup: html, width: 600 })
+      }
+    })
+  },
+  sendPush: function (receiver, alarm_subject, alarm_content, url, alarm_img_tmp_idx, alarm_img, all_send, is_booking, booking_time, alarm_token, alarm_token_key) {
+    $.ajax({
+      type: 'POST',
+      data: {
+        receiver,
+        alarm_subject,
+        alarm_content,
+        url,
+        alarm_img_tmp_idx,
+        alarm_img,
+        all_send: (all_send ? 'Y' : 'N'),
+        is_booking: (is_booking ? 'Y' : 'N'),
+        booking_time,
+        alarm_token,
+        alarm_token_key
+      },
+      url: ('/admin/ajax/send_alarm.cm'),
+      dataType: 'json',
+      async: false,
+      cache: false,
+      success: function (res) {
+        if (res.msg == 'SUCCESS') {
+          $.cocoaDialog.open({ type: 'admin', custom_popup: res.html, width: 550 })
+        } else {
+          if (res.html !== undefined) {
+            $.cocoaDialog.open({ type: 'admin', custom_popup: res.html, width: 550 })
+          } else {
+            alert(res.msg)
+          }
+        }
+      }
+    })
+  },
+  sendSms: function (receiver, title, msg, chk_agree, booking_time, is_booking) {
+    if (!is_writing) {
+      is_writing = true
+      $.ajax({
+        type: 'POST',
+        data: { receiver, title, msg, chk_agree, booking_time, is_booking: (is_booking ? 'Y' : 'N') },
+        url: ('/admin/ajax/sms/send_sms.cm'),
+        dataType: 'json',
+        async: false,
+        cache: false,
+        success: function (res) {
+          if (res.msg == 'SUCCESS') {
+            $.cocoaDialog.open({ type: 'admin', custom_popup: res.html, width: 550, close_block: true })
+          } else {
+            if (res.html !== undefined) {
+              $.cocoaDialog.open({ type: 'admin', custom_popup: res.html, width: 550 })
+            } else {
+              alert(res.msg)
+            }
+          }
+          is_writing = false
+        }
+      })
+    } else {
+      alert('전송중입니다.')
+      window.location.reload()
+    }
+  },
+  deleteBookingSms: function (sms_log_idx, sms_type) {
+    if (!confirm(LOCALIZE_ADMIN.설명_여러명에게전송한메세지의경우일괄취소됩니다())) return false
+    $.ajax({
+      type: 'POST',
+      data: { sms_log_idx, sms_type },
+      url: ('/admin/ajax/sms/delete_booking_sms.cm'),
+      dataType: 'json',
+      async: false,
+      cache: false,
+      success: function (obj) {
+        if (obj.msg === 'SUCCESS') {
+          window.location.reload()
+        } else {
+          if (obj.msg === 'CONFLICT') {
+            alert(getLocalizeString('설명_이미발송된메세지는취소할수없습니다', '', '이미 발송된 메세지는 취소할 수 없습니다'))
+            window.location.reload()
+          } else {
+            alert(obj.msg)
+          }
+        }
+      }
+    })
+  },
+  openSmsDetailList: function (sms_log_idx, search_type, search_keyword) {
+    $.ajax({
+      type: 'POST',
+      data: { 'sms_log_idx' :  sms_log_idx, 'search_type' : search_type, 'search_keyword':  search_keyword},
+      url: ('/admin/ajax/sms/sms_detail_list.cm'),
+      dataType: 'html',
+      async: false,
+      cache: false,
+      success: function (html) {
+        $.cocoaDialog.open({ type: 'admin_sms', custom_popup: html })
+      }
+    })
+  },
+  openChargeSmsform: function (type) {
+    $.ajax({
+      type: 'POST',
+      data: { type },
+      url: ('/admin/ajax/sms/charge_sms.cm'),
+      dataType: 'html',
+      async: false,
+      cache: false,
+      success: function (html) {
+        $.cocoaDialog.open({
+          type: 'admin_sms',
+          custom_popup: html,
+          use_enter: true,
+          hide_event: function () {
+            $(window).unbind('keydown')
+          }
+        })
+      }
+    })
+  },
+  sendSmsInit: function () {
+    let url = decodeURIComponent(location.href)
+    url = decodeURIComponent(url)
+    url = url.split('#')
+    if (url.length > 1 && url[1] == 'typednumber') {
+      $('input[name="send_to"]:radio[value="number"]').attr('checked', true)
+      $('.form-group.send_to').hide()
+      $('.form-group.send_to.number').show()
+    }
+  },
+  openManageMemberPoint: function (code) {
+    $.ajax({
+      type: 'POST',
+      data: { code },
+      url: ('/admin/ajax/member/manage_member_point.cm'),
+      dataType: 'html',
+      async: false,
+      cache: false,
+      success: function (html) {
+        $.cocoaDialog.open({ type: 'admin', custom_popup: html })
+      }
+    })
+  },
+  manageMemberPoint: function (code) {
+    const $form = $('#shop_member_point')
+    const data = $form.serializeObject()
+    $.ajax({
+      type: 'POST',
+      data: { code, data },
+      url: ('/admin/ajax/member/manage_member_point_proc.cm'),
+      dataType: 'json',
+      async: false,
+      cache: false,
+      success: function (result) {
+        if (result.msg == 'SUCCESS') {
+          location.reload()
+        } else { alert(result.msg) }
+      }
+    })
+  },
+  updateAdminMemo: function (member_code, memo, callback) {
+    $.ajax({
+      type: 'POST',
+      data: {
+        admin_memo: memo,
+        code: member_code
+      },
+      url: ('/admin/ajax/member/update_admin_memo.cm'),
+      dataType: 'json',
+      async: false,
+      cache: false,
+      success: function (res) {
+        callback(res)
+      }
+    })
+  },
+  openAdminMemoForm: function (member_code) {
+    $.ajax({
+      type: 'POST',
+      data: { member_code },
+      url: ('/admin/ajax/member/admin_memo_form.cm'),
+      dataType: 'html',
+      async: false,
+      cache: false,
+      success: function (html) {
+        $.cocoaDialog.open({ type: 'admin', custom_popup: html, width: 550 }, function () {
+          const $btn_admin_memo = $('#btn_admin_memo')
+          const $admin_memo = $('#admin_memo')
+          if ($admin_memo.length > 0) {
+            const $admin_memo_chars_title = $('#admin_memo_chars_title')
+            var pre_admin_memo = $admin_memo.val()
+            $admin_memo_chars_title.html(getByteLength(pre_admin_memo) + '/500')
+            $admin_memo.off('keyup.admin_memo').on('keyup.admin_memo', function (e) {
+              const content = $(this).val()
+              $admin_memo_chars_title.html(getByteLength(content) + '/500')
+            })
+          }
+
+          $btn_admin_memo.off('click.btn_admin_memo').on('click.btn_admin_memo', function () {
+            const memo = $admin_memo.val()
+            if (pre_admin_memo !== memo) {
+              pre_admin_memo = memo
+
+              if (member_code !== '') {
+                adminMember.updateAdminMemo(member_code, memo, function (res) {
+                  if (res.msg !== 'SUCCESS') alert(res.msg)
+                  else location.reload()
+                })
+              }
+            }
+          })
+        })
+      }
+    })
+  }
+}
+const SMS_DATAIL_PAGE_MODE = (function () {
+  let page = 1
+  let end_data = false
+  const init = function (sms_log_idx, reset) {
+    getSmsDetailList(sms_log_idx, reset)
+  }
+  var getSmsDetailList = function (sms_log_idx, reset) {
+    if (reset === true) {
+      page = 1
+      end_data = false
+    }
+    if (end_data) return false
+    $.ajax({
+      type: 'GET',
+      data: { sms_log_idx, page },
+      url: ('/admin/ajax/sms/get_sms_detail_list.cm'),
+      dataType: 'json',
+      async: false,
+      cache: true,
+      success: function (res) {
+        if (res.data) {
+          if (res.data.length >= 30) {
+            $('#target-parent').css('height', '50vh').css('overflow-y', 'scroll')
+          }
+          page++
+          res.data.forEach(function (log) {
+            $('#target').append(
+              '<tr>' +
+							'<td class="text-center">' + log.receiver + '</td>\n' +
+							'<td class="text-center" style="padding : 8px;">' + log.status + '</td>\n' +
+							'</tr>')
+          })
+        } else {
+          end_data = true
+        }
+      }
+    })
+  }
+  return {
+    init: function (sms_log_idx, reset) {
+      init(sms_log_idx, reset)
+    },
+    getSmsDetailList: function (sms_log_idx, reset) {
+      getSmsDetailList(sms_log_idx, reset)
+    }
+  }
+}())
+const ADMIN_SMS_SEND = (function () {
+  let send_type
+  let push_member_data
+  let $receiver, $sender, $title, $content
+
+  const init = function (type) {
+    send_type = type
+    $sender = $('#sms_num')
+    $content = $('#sms_content')
+    $title = $('#sms_subject')
+
+    // 전화번호 형식 체크
+    $('.phonenumber').on('keydown').check_callnum()
+
+    // 내용 작성시 바이트 표기
+    const lms_max_byte = 2000
+    $content.keyup(function (e) {
+      const content = $(this).val()
+      let msg_byte = getByteLengthForKorean(content)
+
+      if (msg_byte > 90) {
+        if (msg_byte > lms_max_byte) {
+          alert(LOCALIZE_ADMIN.설명_n바이트를초과할수없습니다(lms_max_byte))
+          $(this).val(cutByLen(content, lms_max_byte))
+          msg_byte = 2000
+        }
+        $('#chars_app_title').html(msg_byte + '/2000')
+      } else {
+        $('#chars_app_title').html(msg_byte + '/90')
+      }
+    })
+
+    const lms_max_subject_byte = 40
+    $title.keyup(function (e) {
+      const content = $(this).val()
+      let msg_byte = getByteLengthForKorean(content)
+
+      if (msg_byte > lms_max_subject_byte) {
+        alert(LOCALIZE_ADMIN.설명_n바이트를초과할수없습니다(lms_max_subject_byte))
+        $(this).val(cutByLen(content, 40))
+        msg_byte = 40
+      }
+      $('#chars_subject_cnt').html(msg_byte + '/40')
+    })
+
+    $('#sms_subject,#sms_content').keyup()
+
+    // 주문리스트에서 호출 시 추가 설정
+    if (send_type == 'order') {
+      $receiver = $('#receiver_num')
+
+      // 라디오 버튼 변경시 수신번호 인풋 제어
+      $('input[name="receiver_type"]').on('change', function () {
+        $receiver.val($(this).data('number'))
+        $receiver.data('number', $(this).data('number'))
+      })
+
+      // 번호 직접 수정시에 라디오 체크 해제
+      $receiver.on('keyup', function () {
+        if ($(this).data('number') != $(this).val()) {
+          $('input[name="receiver_type"]:checked').prop('checked', false)
+        }
+      })
+    }
+  }
+
+  const send_push = function () {
+    makeReceiver()
+    if (push_member_data.length <= 0) {
+      alert(getLocalizeString('설명_받는사람필수항목', '', '받는사람은 필수항목입니다.'))
+      return false
+    }
+    if ($content.val().trim() === '') {
+      alert(getLocalizeString('설명_내용필수항목', '', '내용은 필수 항목입니다.'))
+      return false
+    }
+    adminMember.sendSms(push_member_data, $title.val(), $content.val())
+  }
+
+  var makeReceiver = function () {
+    // 초기화
+    push_member_data = []
+    switch (send_type) {
+      case 'npay':
+      case 'order':
+        push_member_data.push({ type: 'number', value: $receiver.val() })
+        break
+      case 'member':
+        $('.receiver_list:checked').each(function () {
+          push_member_data.push({ type: 'member', value: $(this).val() })
+        })
+        break
+    }
+  }
+  return {
+    init: function (type) {
+      init(type)
+    },
+    send_push: function () {
+      send_push()
+    }
+  }
+}())
+
+const AUTO_MAIL_SETTING = (function () {
+  let $dialog
+  let header_ctl
+  let $form
+  let old_smtp_data
+  let redis_data
+  let $post_new_detail_close, $form_new_detail_close
+  let low_security_warning
+
+  const init = function ($obj) {
+    $dialog = $obj
+    $form = $dialog.find('#mail_setting_form')
+    $post_new_detail_close = $form.find('#post_new_detail_close')
+    $form_new_detail_close = $form.find('#form_new_detail_close')
+    header_ctl = new HEADER_CONTROL()
+    header_ctl.init()
+    header_ctl.addBtn('save', function () {
+      submit()
+    })
+    createEvent()
+  }
+
+  const initSmtp = function (data, _redis_data) {
+    low_security_warning = getLocalizeString('설명_보안수준이낮은앱연결방식은기존사용자만지원', '', '보안 수준이 낮은 앱 연결 방식은 기존 사용자만 지원됩니다.\n더 안전하고 편리한 OAuth 연결 방식으로 메일 설정을 다시 해주시기바랍니다.')
+    old_smtp_data = data
+    redis_data = _redis_data
+    setMailSmtpForm(old_smtp_data.type)
+  }
+
+  var createEvent = function () {
+    $form.find('input, textarea').off('change, keyup').on('change, keyup, blur', function () {
+      header_ctl.change()
+    })
+    $form.find('._btn_mail_preview').off('click').on('click', function() {
+      const $this = $(this);
+
+      const type = $this.data('type');
+      const configurable_type_text = $this.data('configurable-type-text');
+      const type_text = $this.data('type-text');
+
+      $.ajax({
+          cache: false,
+          async: false,
+          dataType: 'html',
+          type: 'POST',
+          url: '/admin/ajax/mail_preview_dialog.cm',
+          data: {
+              type,
+              dialog_title: `${configurable_type_text} - ${type_text}`,
+          },
+          success: function (html) {
+              const $html = $(html);
+
+              $html.find('._btn_view_option').not('.disabled').off('click').on('click', function() {
+                  const view_option = $(this).data('view-option');
+
+                  $html.find('._btn_view_option[data-view-option=user]').removeClass('active');
+                  $html.find('._btn_view_option[data-view-option=admin]').removeClass('active');
+
+                  $html.find('._preview_panel > [data-view-option-panel=user]').hide();
+                  $html.find('._preview_panel > [data-view-option-panel=admin]').hide();
+
+                  $html.find(`._btn_view_option[data-view-option=${view_option}]`).addClass('active');
+                  $html.find(`._preview_panel > [data-view-option-panel=${view_option}]`).show();
+              });
+
+              $.cocoaDialog.open({
+                  type: 'mail-preview',
+                  custom_popup: $html,
+                  pc_width: 800,
+              });
+          }
+      });
+    });
+    $dialog.find("input[name='smtp_data[sender_mail]']").blur(function () {
+      changeSmtpData()
+    })
+    $dialog.find("input[name='smtp_data[user_id]']").blur(function () {
+      changeSmtpData()
+    })
+    $dialog.find("input[name='smtp_data[user_password]']").blur(function () {
+      changeSmtpData()
+    })
+    $dialog.find("input[name='smtp_data[custom_smtp_server]']").blur(function () {
+      changeSmtpData()
+    })
+    $dialog.find("input[name='smtp_data[custom_smtp_port]']").blur(function () {
+      changeSmtpData()
+    })
+    $dialog.find("input[name='smtp_data[custom_auth]']").change(function () {
+      changeSmtpData()
+    })
+    $dialog.find("input[name='smtp_data[custom_user_id]']").blur(function () {
+      changeSmtpData()
+    })
+    $dialog.find("input[name='smtp_data[custom_user_password]']").blur(function () {
+      changeSmtpData()
+    })
+    $dialog.find("input[name='smtp_data[custom_sender_name]']").blur(function () {
+      changeSmtpData()
+    })
+    $dialog.find("input[name='smtp_data[custom_sender_email]']").blur(function () {
+      changeSmtpData()
+    })
+    $dialog.find("input[name='smtp_data[auth_email]']").blur(function () {
+      changeSmtpData()
+    })
+    $dialog.find("input[name='smtp_data[gmail_oauth_auth]']").on('change', function () {
+      setMailSmtpForm($dialog.find('#smtp_type_select').val())
+    })
+	  $dialog.find("input[name='smtp_data[outlook_oauth_auth]']").on('change', function () {
+		  setMailSmtpForm($dialog.find('#smtp_type_select').val())
+	  })
+    $dialog.find('#smtp_type_select').change(function () {
+      if ($(this).val() === 'default' && !(old_smtp_data.type === 'default' || old_smtp_data.type === null)) {
+        if (confirm(getLocalizeString('설명_기본설정으로변경하시겠습니까', '', '기본설정으로 변경 하시겠습니까?'))) {
+          const data = $form.serializeObject()
+          $.ajax({
+            type: 'POST',
+            data,
+            url: ('/admin/ajax/member/update_smtp_default_setting.cm'),
+            dataType: 'json',
+            async: false,
+            cache: false,
+            success: function (res) {
+              if (res.msg === 'SUCCESS') {
+                location.reload()
+              } else {
+                alert(res.msg)
+              }
+            }
+          })
+        } else {
+          $dialog.find('#smtp_type_select').val(old_smtp_data.type)
+          $dialog.find('#smtp_type_select').chosen().val(old_smtp_data.type).trigger('chosen:updated')
+          setMailSmtpForm(old_smtp_data.type)
+        }
+      } else {
+        setMailSmtpForm($dialog.find('#smtp_type_select').val())
+      }
+    })
+    addSelectEvent($dialog)
+  }
+
+  var setMailSmtpForm = function (type) {
+    if (old_smtp_data.type === type) {
+      if ((typeof redis_data === 'object' && Object.keys(redis_data).length > 0) && old_smtp_data.authentic === false) {
+        $form.find('._auth_btn').show()
+      }
+      $dialog.find("input[name='smtp_data[sender_mail]']").val(old_smtp_data.sender_mail)
+      $dialog.find("input[name='smtp_data[user_id]']").val(old_smtp_data.user_id)
+      $dialog.find("input[name='smtp_data[custom_smtp_server]']").val(old_smtp_data.custom_smtp_server)
+      $dialog.find("input[name='smtp_data[custom_smtp_port]']").val(old_smtp_data.custom_smtp_port)
+      $dialog.find("input[name='smtp_data[custom_auth]']").prop('checked', old_smtp_data.custom_auth === 'Y')
+      $dialog.find("input[name='smtp_data[custom_user_id]']").val(old_smtp_data.custom_user_id)
+      $dialog.find("input[name='smtp_data[custom_sender_name]']").val(old_smtp_data.custom_sender_name)
+      $dialog.find("input[name='smtp_data[custom_sender_email]']").val(old_smtp_data.custom_sender_email)
+      $dialog.find("input[name='smtp_data[auth_email]']").val(old_smtp_data.auth_email)
+    } else {
+      if (typeof redis_data === 'object' && Object.keys(redis_data).length > 0) {
+        if (redis_data.type === type && old_smtp_data.type !== 'default') {
+          $form.find('._auth_btn').show()
+        } else {
+          $form.find('._auth_btn').hide()
+        }
+      }
+      $dialog.find("input[name='smtp_data[sender_mail]']").val('')
+      $dialog.find("input[name='smtp_data[user_id]']").val('')
+      $dialog.find("input[name='smtp_data[user_password]']").val('')
+      $dialog.find("input[name='smtp_data[custom_smtp_server]']").val('')
+      $dialog.find("input[name='smtp_data[custom_smtp_port]']").val('')
+      $dialog.find("input[name='smtp_data[custom_auth]']").prop('checked', false)
+      $dialog.find("input[name='smtp_data[custom_user_id]']").val('')
+      $dialog.find("input[name='smtp_data[custom_user_password]']").val('')
+      $dialog.find("input[name='smtp_data[custom_sender_name]']").val('')
+      $dialog.find("input[name='smtp_data[custom_sender_email]']").val('')
+      $dialog.find("input[name='smtp_data[auth_email]']").val('')
+    }
+
+    switch (type) {
+      case 'naver':
+      case 'daum':
+      case 'nate':
+        $form.find('._default_help').hide()
+        $form.find('._gmail_type_wrap').hide()
+        $form.find('._gmail_oauth_wrap').hide()
+	      $form.find('._outlook_type_wrap').hide()
+	      $form.find('._outlook_oauth_wrap').hide()
+        $form.find('._external_smtp_wrap').show()
+        $form.find('._custom_smtp_wrap').hide()
+        $form.find('._smtp_auth_wrap').show()
+        $form.find('._gmail_oauth_wrap').hide()
+        $form.find('._mailgun_wrap').hide()
+        break;
+      case 'gmail': // gmail OAuth연결과 보안 수준이 낮은 앱 연결 선택, 기존 회원인 경우 보안수준이 낮은 앱 연결 선택되어 있음
+        $form.find('._default_help').hide()
+        if ($dialog.find("input[name='smtp_data[gmail_oauth_auth]']:checked").val() === 'N') {
+          $form.find('._external_smtp_wrap').show()
+          $form.find('._smtp_auth_wrap').show()
+          $form.find('._gmail_oauth_wrap').hide()
+          $form.find('._gmail_type_wrap').show()
+	        $form.find('._outlook_oauth_wrap').hide()
+	        $form.find('._outlook_type_wrap').hide()
+          $('._external_smtp_wrap input').attr('readonly', true).off('click').on('click', function () {
+            alert(low_security_warning)
+          })
+        } else {
+          $form.find('._external_smtp_wrap').hide()
+          $form.find('._smtp_auth_wrap').hide()
+          $form.find('._gmail_oauth_wrap').show()
+          $form.find('._gmail_type_wrap').hide()
+	        $form.find('._outlook_oauth_wrap').hide()
+	        $form.find('._outlook_type_wrap').hide()
+          if (old_smtp_data.authentic === true && old_smtp_data.gmail_oauth_auth === false) {
+          } else {
+            $form.find('._gmail_type_wrap #lowSecurity').attr('disabled', true)
+          }
+        }
+
+        $form.find('._custom_smtp_wrap').hide()
+        $form.find('._mailgun_wrap').hide()
+        break;
+	    case 'outlook': // outlook OAuth연결과 보안 수준이 낮은 앱 연결 선택, 기존 회원인 경우 보안수준이 낮은 앱 연결 선택되어 있음
+		    $form.find('._default_help').hide()
+		    if ($dialog.find("input[name='smtp_data[outlook_oauth_auth]']:checked").val() === 'N') {
+			    $form.find('._external_smtp_wrap').show()
+			    $form.find('._smtp_auth_wrap').show()
+			    $form.find('._gmail_oauth_wrap').hide()
+			    $form.find('._gmail_type_wrap').hide()
+			    $form.find('._outlook_oauth_wrap').hide()
+			    $form.find('._outlook_type_wrap').show()
+			    $('._external_smtp_wrap input').attr('readonly', true).off('click').on('click', function () {
+				    alert(low_security_warning)
+			    })
+		    } else {
+			    $form.find('._external_smtp_wrap').hide()
+			    $form.find('._smtp_auth_wrap').hide()
+			    $form.find('._gmail_oauth_wrap').hide()
+			    $form.find('._gmail_type_wrap').hide()
+			    $form.find('._outlook_oauth_wrap').show()
+			    $form.find('._outlook_type_wrap').hide()
+			    if (old_smtp_data.authentic === true && old_smtp_data.outlook_oauth_auth === false) {
+			    } else {
+				    $form.find('._outlook_type_wrap #lowSecurity').attr('disabled', true)
+			    }
+		    }
+
+		    $form.find('._custom_smtp_wrap').hide()
+            $form.find('._mailgun_wrap').hide()
+		    break
+      case 'custom':
+        $form.find('._default_help').hide()
+        $form.find('._gmail_type_wrap').hide()
+        $form.find('._gmail_oauth_wrap').hide()
+	      $form.find('._outlook_type_wrap').hide()
+	      $form.find('._outlook_oauth_wrap').hide()
+        $form.find('._external_smtp_wrap').hide()
+        $form.find('._custom_smtp_wrap').show()
+        $form.find('._smtp_auth_wrap').show()
+        $form.find('._mailgun_wrap').hide()
+        break
+      case 'mailgun':
+        $form.find('._default_help').hide()
+        $form.find('._gmail_type_wrap').hide()
+        $form.find('._gmail_oauth_wrap').hide()
+        $form.find('._outlook_type_wrap').hide()
+        $form.find('._outlook_oauth_wrap').hide()
+        $form.find('._external_smtp_wrap').hide()
+        $form.find('._custom_smtp_wrap').hide()
+        $form.find('._smtp_auth_wrap').hide()
+        $form.find('._mailgun_wrap').show()
+        break;
+      case 'default':
+      default:
+        $form.find('._default_help').show()
+        $form.find('._gmail_type_wrap').hide()
+        $form.find('._gmail_oauth_wrap').hide()
+	      $form.find('._outlook_type_wrap').hide()
+	      $form.find('._outlook_oauth_wrap').hide()
+        $form.find('._external_smtp_wrap').hide()
+        $form.find('._custom_smtp_wrap').hide()
+        $form.find('._smtp_auth_wrap').hide()
+        $form.find('._mailgun_wrap').hide()
+        break
+    }
+    if (type === 'default' || type === undefined) {
+      $form.find('._mail_wrap').hide()
+    } else {
+      if (type !== 'gmail') { $('._external_smtp_wrap input').attr('readonly', false).off('click') }
+      $form.find('._mail_wrap').show()
+    }
+    changeSmtpData()
+  }
+
+  var changeSmtpData = function () {
+    let old_data
+    let new_data
+    let authentication_required
+	  if ($dialog.find('#smtp_type_select').val() === 'gmail' && $dialog.find("input[name='smtp_data[gmail_oauth_auth]']:checked").val() === 'Y') {
+      if (old_smtp_data.type === 'gmail' && old_smtp_data.authentic === true && old_smtp_data.gmail_oauth_auth === true) {
+        $dialog.find('._gmail_oauth_btn').hide()
+        $dialog.find('._smtp_check_request_wrap').hide()
+        $dialog.find('._gmail_oauth_complete').show()
+	      $dialog.find('._outlook_oauth_btn').hide();
+	      $dialog.find('._outlook_oauth_complete').hide();
+      } else if (old_smtp_data.type === 'gmail' && old_smtp_data.authentic === false && old_smtp_data.gmail_oauth_auth === true) {
+        // 재인증 필요한 경우
+        $dialog.find('._gmail_oauth_btn').show()
+        $dialog.find('._smtp_check_request_wrap').show()
+        $dialog.find('._gmail_oauth_complete').hide()
+	      $dialog.find('._outlook_oauth_btn').hide();
+	      $dialog.find('._outlook_oauth_complete').hide();
+      } else {
+        $dialog.find('._gmail_oauth_btn').show()
+        $dialog.find('._smtp_check_request_wrap').hide()
+        $dialog.find('._gmail_oauth_complete').hide()
+	      $dialog.find('._outlook_oauth_btn').hide();
+	      $dialog.find('._outlook_oauth_complete').hide();
+      }
+    }else  if ($dialog.find('#smtp_type_select').val() === 'outlook' && $dialog.find("input[name='smtp_data[outlook_oauth_auth]']:checked").val() === 'Y') {
+	    if (old_smtp_data.type === 'outlook' && old_smtp_data.authentic === true && old_smtp_data.outlook_oauth_auth === true) {
+		    $dialog.find('._gmail_oauth_btn').hide()
+		    $dialog.find('._gmail_oauth_complete').hide()
+		    $dialog.find('._outlook_oauth_btn').hide()
+		    $dialog.find('._smtp_check_request_wrap').hide()
+		    $dialog.find('._outlook_oauth_complete').show()
+	    } else if (old_smtp_data.type === 'outlook' && old_smtp_data.authentic === false && old_smtp_data.outlook_oauth_auth === true) {
+		    // 재인증 필요한 경우
+		    $dialog.find('._gmail_oauth_btn').hide()
+		    $dialog.find('._outlook_oauth_btn').show()
+		    $dialog.find('._smtp_check_request_wrap').show()
+		    $dialog.find('._gmail_oauth_complete').hide()
+		    $dialog.find('._outlook_oauth_complete').hide()
+	    } else {
+		    $dialog.find('._outlook_oauth_btn').show()
+		    $dialog.find('._gmail_oauth_btn').hide()
+		    $dialog.find('._smtp_check_request_wrap').hide()
+		    $dialog.find('._gmail_oauth_complete').hide()
+		    $dialog.find('._outlook_oauth_complete').hide()
+	    }
+    } else {
+      $.each(old_smtp_data, function (k, v) {
+        const skip_list = [
+          'idx',
+          'site_code',
+          'authentic',
+          'auth_email',
+          'gmail_oauth_auth',
+          'outlook_oauth_auth',
+          'oauth_refresh_token',
+          'client_id',
+          'client_secret',
+          'mailgun_sender_name',
+          'mailgun_sender_email',
+          'mailgun_api_key',
+          'is_mailgun_verified'
+        ];
+        if(skip_list.includes(k)) return true
+        authentication_required = false
+        old_data = v
+        switch (k) {
+          case 'type' :
+            new_data = $dialog.find("select[name='smtp_data[" + k + "]']").val()
+            if (old_data !== new_data) {
+              authentication_required = true
+            }
+            break
+          case 'custom_auth' :
+            new_data = $dialog.find("input[name='smtp_data[" + k + "]']").prop('checked') ? 'Y' : 'N'
+            if (old_data !== new_data) {
+              authentication_required = true
+            }
+            break
+          case 'user_password' :
+            new_data = $dialog.find("input[name='smtp_data[" + k + "]']").val()
+            if ((old_smtp_data.type === 'naver' || old_smtp_data.type === 'gmail' || old_smtp_data.type === 'daum' || old_smtp_data.type === 'nate') && old_smtp_data.authentic) {
+              if (new_data !== '') {
+                authentication_required = true
+              }
+            }
+            break
+          case 'custom_user_password' :
+            new_data = $dialog.find("input[name='smtp_data[" + k + "]']").val()
+            if ((old_smtp_data.type === 'custom') && old_smtp_data.authentic) {
+              if (new_data !== '') {
+                authentication_required = true
+              }
+            }
+            break
+          default:
+            new_data = $dialog.find("input[name='smtp_data[" + k + "]']").val()
+            if (old_data !== new_data) {
+              authentication_required = true
+            }
+            break
+        }
+        if (authentication_required) {
+          $dialog.find('._auth_mail_send_btn').show()
+          $dialog.find('._auth_complete').hide()
+          return false
+        } else {
+          if (old_smtp_data.authentic === true) {
+            $dialog.find('._auth_mail_send_btn').hide()
+            $dialog.find('._auth_complete').show()
+          }
+        }
+      })
+    }
+  }
+
+  const group_chang = function (type, $obj, name, code) {
+    let old_text, new_text
+
+    old_text = $obj.find('span').text()
+    $obj.find('span').text(name)
+    new_text = $obj.find('span').text()
+
+    if (name == '지정안함') {
+      $('#group_' + type).val('')
+      $('#group_' + type + '_name').val('')
+    } else {
+      $('#group_' + type).val(code)
+      $('#group_' + type + '_name').val(name)
+    }
+
+    if (old_text != new_text) {
+      header_ctl.change()
+    }
+  }
+
+  const sendAuthMail = function () {
+    let error_msg = ''
+    switch ($form.find('#smtp_type_select').val()) {
+      case 'naver' :
+      case 'gmail' :
+      case 'daum' :
+      case 'nate' :
+        if ($form.find("input[name='smtp_data[sender_mail]']").val() == '') {
+          error_msg = getLocalizeString('설명_발신자메일주소입력', '', '발신자 메일주소를 입력해 주세요.')
+          break
+        }
+        if ($form.find("input[name='smtp_data[user_id]']").val() == '') {
+          error_msg = getLocalizeString('설명_로그인ID입력', '', '로그인 ID를 입력해 주세요.')
+          break
+        }
+        if ($form.find("input[name='smtp_data[user_password]']").val() == '') {
+          error_msg = getLocalizeString('설명_패스워드입력', '', '패스워드를 입력해 주세요.')
+          break
+        }
+        if ($form.find('#auth_email').val() == '') {
+          error_msg = getLocalizeString('설명_인증메일주소입력', '', '인증 메일 주소를 입력해주세요.')
+          break
+        }
+        break
+      case 'custom' :
+        if ($form.find("input[name='smtp_data[custom_smtp_server]']").val() == '') {
+          error_msg = getLocalizeString('설명_SMTP서버입력', '', 'SMTP 서버를 입력해 주세요.')
+          break
+        }
+        if ($form.find("input[name='smtp_data[custom_smtp_port]']").val() == '') {
+          error_msg = getLocalizeString('설명_SMTP포트입력', '', 'SMTP 포트를 입력해 주세요.')
+          break
+        }
+        if ($form.find("input[name='smtp_data[custom_user_id]']").val() == '') {
+          error_msg = getLocalizeString('설명_로그인ID입력', '', '로그인 ID를 입력해 주세요.')
+          break
+        }
+        if ($form.find("input[name='smtp_data[custom_user_password]']").val() == '') {
+          error_msg = getLocalizeString('설명_패스워드입력', '', '패스워드를 입력해 주세요.')
+          break
+        }
+        if ($form.find("input[name='smtp_data[custom_sender_email]']").val() == '') {
+          error_msg = getLocalizeString('설명_발신자메일주소입력', '', '발신자 메일주소를 입력해 주세요.')
+          break
+        }
+        if ($form.find('#auth_email').val() == '') {
+          error_msg = getLocalizeString('설명_인증메일주소입력', '', '인증 메일 주소를 입력해주세요.')
+          break
+        }
+        break
+      case 'default' :
+      default:
+        error_msg = 'Error.'
+        break
+    }
+
+    if (error_msg != '') {
+      alert(error_msg)
+      return false
+    }
+
+    const data = $form.serializeObject()
+    $.ajax({
+      type: 'POST',
+      data,
+      url: ('/admin/ajax/member/send_auth_mail.cm'),
+      dataType: 'json',
+      async: false,
+      cache: false,
+      success: function (res) {
+        if (res.msg == 'SUCCESS') {
+          if (typeof res.redis_data === 'object' && Object.keys(res.redis_data).length > 0) {
+            redis_data = res.redis_data
+          }
+          $form.find('#auth_mail_send_btn').html(getLocalizeString('설명_인증메일재발송', '', '인증 메일 재발송'))
+          $form.find('._auth_btn').show()
+        }
+        $.cocoaDialog.open({ type: 'admin', custom_popup: res.html, width: 600 })
+      }
+    })
+  }
+
+	const verifyMailgunDomain = function () {
+		const mailgun_sender_name = $form.find("input[name='smtp_data[mailgun_sender_name]']").val();
+		const mailgun_sender_email = $form.find("input[name='smtp_data[mailgun_sender_email]']").val();
+		const mailgun_api_key = $form.find("input[name='smtp_data[mailgun_api_key]']").val();
+
+		if (!mailgun_sender_name) {
+			alert('발신자명을 입력해 주세요.');
+			return false;
+		}
+		if(mailgun_sender_name.length > 100){
+			alert('발신자명은 100자 이내로 입력해주세요.');
+			return false;
+		}
+		if (!mailgun_sender_email) {
+			alert('발신자 메일주소를 입력해 주세요.');
+			return false;
+		}
+		if(mailgun_sender_email.length > 100){
+			alert('발신자 메일주소는 100자 이내로 입력해주세요.');
+			return false;
+		}
+		if (!mailgun_api_key) {
+			alert('api key를 입력해 주세요.');
+			return false;
+		}
+		if(mailgun_api_key.length > 100){
+			alert('api key는 100자 이내로 입력해주세요.');
+			return false;
+		}
+
+		const data = {
+			mailgun_sender_name,
+			mailgun_sender_email,
+			mailgun_api_key
+		}
+		$.ajax({
+			type: 'POST',
+			data,
+			url: ('/admin/ajax/member/verify_mailgun_domain.cm'),
+			dataType: 'json',
+			async: false,
+			cache: false,
+			success: function (res) {
+				if (res.msg == 'SUCCESS') {
+                   alert(getLocalizeString('설명_인증에성공하였습니다', '', '인증에 성공 하였습니다.'))
+                   location.reload()
+				}else{
+					alert(res.msg)
+				}
+			}
+		})
+	}
+
+  const runAuth = function (code) {
+    const data = $form.serializeObject()
+    $.ajax({
+      type: 'POST',
+      data,
+      url: ('/admin/ajax/member/run_smtp_setting_auth.cm'),
+      dataType: 'json',
+      async: false,
+      cache: false,
+      success: function (res) {
+        if (res.msg == 'SUCCESS') {
+          alert(getLocalizeString('설명_인증에성공하였습니다', '', '인증에 성공 하였습니다.'))
+          location.reload()
+        } else {
+          alert(res.msg)
+        }
+      }
+    })
+  }
+
+  const openSmtpHelpForm = function () {
+    $.ajax({
+      url: ('/admin/ajax/member/smtp_help_form.cm'),
+      dataType: 'html',
+      async: false,
+      cache: false,
+      success: function (res) {
+        const $html = $(res)
+        $.cocoaDialog.open({ type: 'admin', custom_popup: $html, width: 600 })
+      }
+    })
+  }
+
+  var submit = function () {
+    const data = $form.serializeObject()
+    $.ajax({
+      type: 'POST',
+      data,
+      url: ('/admin/ajax/member/mail_setting_update.cm'),
+      dataType: 'json',
+      async: false,
+      cache: false,
+      success: function (res) {
+        if (res.msg == 'SUCCESS') {
+          header_ctl.save()
+        } else {
+          alert(res.msg)
+        }
+      }
+    })
+  }
+
+  const openDetailSet = function (type) {
+    const configurable_detail_list = ['post', 'form']
+    if (configurable_detail_list.indexOf(type) < 0) return false
+    const $detail = $('#' + type + '_detail_set')
+
+    if ($detail.find('.detail-row').length == 0) {
+      $detail.html('<div class="text-center"><i class="fa fa-spinner fa-2x fa-spin text-muted"></i></div>')
+      $.ajax({
+        url: '/admin/ajax/member/get_mail_detail_setting.cm',
+        type: 'POST',
+        data: { type },
+        dataType: 'HTML',
+        success: function (res) {
+          $detail.html(res)
+          addSelectEvent($detail)
+        }
+      })
+    }
+
+    $detail.toggleClass('hidden')
+    $detail.parents('.card').find('.card-head').find('i').toggle()
+
+    if ($detail.hasClass('hidden')) {
+      if (type === 'post') {
+        $post_new_detail_close.val('true')
+      } else {
+        $form_new_detail_close.val('true')
+      }
+    } else {
+      if (type === 'post') {
+        $post_new_detail_close.val('false')
+      } else {
+        $form_new_detail_close.val('false')
+      }
+    }
+  }
+
+  var addSelectEvent = function ($obj) {
+    if ($obj == undefined) return false
+
+    // 하단공간 없으면 리스트 위로 띄움
+    $obj.find('.group.on-click').on('mousedown', function (e) {
+      // 리스트박스 위치 + 리스트크기 + 약간의 여백
+      const chosen_height = $(this).offset().top - $(window).scrollTop() + $(this).find(('.chosen-drop')).height() + 50
+      if (chosen_height >= $(window).height()) {
+        $(this).find('.chosen-drop').addClass('dropup')
+      } else {
+        $(this).find('.chosen-drop').removeClass('dropup')
+      }
+    })
+
+    $obj.find('select').not('#smtp_type_select').chosen({
+      width: '100%',
+      no_results_text: getLocalizeString('설명_그룹이없습니다', '', '그룹이 없습니다.')
+    }).change(function (e) {
+    })
+
+    $obj.find('#smtp_type_select').chosen({
+      disable_search_threshold: 30
+    }).change(function (e) {
+    })
+
+    $obj.find('select').not('#smtp_type_select').change(function () {
+      header_ctl.change()
+    })
+    $obj.find('input[type=checkbox],input[type=radio]').not('._gmail_type').off('click').on('click', function () {
+      header_ctl.change()
+    })
+  }
+
+  const openGoogleOauth = function (_client_id, _redirect_url) {
+    if (header_ctl !== undefined) {
+      header_ctl.save()
+    }
+    if (_client_id === '' || _redirect_url === '') {
+      alert('실패')
+      return false
+    }
+
+    const client_id = _client_id
+    const redirect_url = _redirect_url
+    const popupWidth = 450
+    const popupHeight = 800
+    const popupX = (window.screen.width / 2) - (popupWidth / 2)
+    const popupY = (window.screen.height / 2) - (popupHeight / 2)
+
+    const data = {
+      approval_prompt: 'auto',
+      response_type: 'code',
+      scope: 'email profile https://www.googleapis.com/auth/gmail.send',
+      redirect_uri: redirect_url,
+      access_type: 'offline',
+      client_id,
+      state: SITE_CODE
+    }
+
+    const data2 = new URLSearchParams(data)
+
+    window.open('https://accounts.google.com/o/oauth2/auth?' + data2.toString(), '', 'width=' + popupWidth + ', height=' + popupHeight + ', left=' + popupX + ', top=' + popupY)
+    window.location.href = '//' + CURRENT_DOMAIN + '/admin/member/mail?mode=gmail_oauth'
+  }
+
+
+	const openAzureOauth = function (_client_id, _redirect_url) {
+		if (header_ctl !== undefined) {
+			header_ctl.save();
+		}
+		if (_client_id === '' || _redirect_url === '') {
+			alert('실패');
+			return false;
+		}
+
+		const client_id = _client_id;
+		const redirect_url = _redirect_url;
+		const popupWidth = 450;
+		const popupHeight = 800;
+		const popupX = (window.screen.width / 2) - (popupWidth / 2);
+		const popupY = (window.screen.height / 2) - (popupHeight / 2);
+
+		const data = {
+			approval_prompt: 'auto',
+			response_mode: 'query',
+			response_type: 'code',
+			scope: 'https://graph.microsoft.com/user.read https://graph.microsoft.com/mail.send offline_access',
+			redirect_uri: redirect_url,
+			access_type: 'offline',
+			client_id: client_id,
+			state: SITE_CODE
+		}
+
+		const data2 = new URLSearchParams(data);
+
+		window.open('https://login.microsoftonline.com/common/oauth2/v2.0/authorize?' + data2.toString(), '', 'width=' + popupWidth + ', height=' + popupHeight + ', left=' + popupX + ', top=' + popupY);
+		window.location.href = '//' + CURRENT_DOMAIN + '/admin/member/mail?mode=azure_oauth'
+	}
+
+  const revokeGmailOauth = function () {
+    if (confirm(getLocalizeString('설명_Gmail연결을해제하면메일이정상적으로', '', 'Gmail 연결을 해제하면 메일이 정상적으로 발송되지 않을 수 있습니다.\n정말 연결을 해제하시겠습니까?'))) {
+      $.ajax({
+        type: 'POST',
+        data: '',
+        url: ('/admin/ajax/member/revoke_gmail_oauth.cm'),
+        dataType: 'json',
+        async: false,
+        cache: false,
+        success: function (res) {
+          if (res.msg == 'SUCCESS') {
+            window.location.reload()
+          } else {
+            alert(res.msg)
+          }
+        }
+      })
+    }
+  }
+
+	const revokeAzureOauth = function () {
+		if (confirm('outlook 연결을 해제 하면 메일이 정상적으로 발송되지 않을 수 있습니다.\n정말 연결을 해제하시겠습니까?')) {
+			$.ajax({
+				type: 'POST',
+				data: '',
+				url: ('/admin/ajax/member/revoke_azure_oauth.cm'),
+				dataType: 'json',
+				async: false,
+				cache: false,
+				success: function (res) {
+					if (res.msg == 'SUCCESS') {
+						window.location.reload()
+					} else {
+						alert(res.msg)
+					}
+				}
+			})
+		}
+	}
+
+	const revokeMailgunSetting = function(){
+		if (confirm('mailgun 연결을 해제 하면 메일이 정상적으로 발송되지 않을 수 있습니다.\n정말 연결을 해제하시겠습니까?')) {
+			$.ajax({
+				type: 'POST',
+				data: '',
+				url: ('/admin/ajax/member/revoke_mailgun_setting.cm'),
+				dataType: 'json',
+				async: false,
+				cache: false,
+				success: function (res) {
+					if (res.msg == 'SUCCESS') {
+						window.location.reload()
+					} else {
+						alert(res.msg)
+					}
+				}
+			})
+		}
+	}
+
+  return {
+    init: function ($obj) {
+      init($obj)
+    },
+    initSmtp: function (data, redis_data) {
+      initSmtp(data, redis_data)
+    },
+    group_chang: function (type, $obj, name, code) {
+      group_chang(type, $obj, name, code)
+    },
+    setMailSmtpForm: function (type) {
+      setMailSmtpForm(type)
+    },
+    sendAuthMail: function () {
+      sendAuthMail()
+    },
+	verifyMailgunDomain: function(){
+	  verifyMailgunDomain()
+	},
+    runAuth: function (code) {
+      runAuth(code)
+    },
+    openDetailSet: function (type) {
+      openDetailSet(type)
+    },
+    openSmtpHelpForm: function () {
+      openSmtpHelpForm()
+    },
+    openGoogleOauth: function (client_id, redirect_url) {
+      openGoogleOauth(client_id, redirect_url)
+    },
+	  openAzureOauth: function (client_id, redirect_url) {
+		  openAzureOauth(client_id, redirect_url)
+	  },
+    revokeGmailOauth: function () {
+      revokeGmailOauth()
+    },
+	  revokeAzureOauth: function () {
+		  revokeAzureOauth()
+	  },
+	  revokeMailgunSetting: function(){
+		  revokeMailgunSetting()
+	  },
+  }
+}())
+
+const AUTO_SMS_SETTING = (function () {
+  let $dialog
+  let header_ctl
+  let $form
+  let $certification_sender_number
+  let $sms_config_wrap
+  const MAX_CERT_DOCUMENT_NUMBER = 11
+  const DOCUMENT_REQUIREMENT = { // 필수로 등록해야 하는 인증 서류
+    personal: {
+      p_owner: [1], // 일반 소유자
+      p_others: [1, 2, 3], // 일반 타인
+      p_other_company: [1, 2, 3, 4, 5] // 일반 타사
+    },
+    business: {
+      b_owner: [1, 7], // 대표자
+      b_first_incumbent: [1, 7, 8], // 자사(재직자)
+      b_first_party: [1, 7], // 자사
+      b_others: [1, 2, 3, 7], // 타인
+      b_other_company: [1, 2, 3, 4, 5, 6, 7, 8, 9] // 타사
+    }
+  }
+  const DOCUMENT_REQUIREMENT_ORDER = [1, 2, 7, 8, 6, 4, 5, 3, 9, 11, 10] // 인증 서류 유효성 검사 순서
+
+  const init = function ($obj) {
+    $dialog = $obj
+    $form = $dialog.find('#sms_setting_form')
+    $sms_config_wrap = $dialog.find('#sms_config_wrap')
+
+    header_ctl = new HEADER_CONTROL()
+    header_ctl.init()
+    header_ctl.addBtn('save', function () {
+      submit()
+    })
+
+    createEvent()
+  }
+
+  var createEvent = function () {
+    $dialog.find('input[type=checkbox],input[type=radio]').off('click').on('click', function () {
+      header_ctl.change()
+    })
+    $dialog.find('input[type=text]').off('keydown').on('keydown, change, blur', function () {
+      header_ctl.change()
+    })
+    $dialog.find('select').off('change').on('change', function () {
+      header_ctl.change()
+    })
+    $dialog.find('input[name="is_use"]').on('change', function () {
+      if ($(this).prop('checked')) {
+        $sms_config_wrap.show()
+        $form.find('#admin_receive_callnum_wrap').show()
+        $form.find('#sender_callnum_wrap').show()
+        $form.find('#sms_count_wrap').show()
+        $form.find('#use_type_wrap').show()
+        if ($dialog.find('input[name="use_type"]:checked').val() === 'kakao_alimtalk') {
+          $form.find('#kakao_alimtalk_wrap').show()
+        }
+      } else {
+        $sms_config_wrap.hide()
+        $form.find('#admin_receive_callnum_wrap').hide()
+        $form.find('#sender_callnum_wrap').hide()
+        $form.find('#sms_count_wrap').hide()
+        $form.find('#kakao_alimtalk_wrap').hide()
+        $form.find('#use_type_wrap').hide()
+      }
+    })
+
+    $dialog.find('input[name="use_type"]').on('change', function () {
+      if ($(this).val() === 'kakao_alimtalk') {
+        $form.find('#kakao_alimtalk_wrap').show()
+      } else {
+        $form.find('#kakao_alimtalk_wrap').hide()
+      }
+    })
+  }
+
+  /***
+	 * 문자발신번호 인증
+	 */
+  function setSmsCertification () {
+    $certification_sender_number = $('#certification_sender_number')
+    setSmsCertificationLayout()
+  }
+
+  /***
+	 * 문자 발신번호 인증 레이아웃 구성
+	 */
+  function setSmsCertificationLayout () {
+    const $cert_save_btn = $certification_sender_number.find('._cert_save_btn')
+    const $document_from = $certification_sender_number.find('._document_from')
+    const $person_type_p = $document_from.find("select[name='person_type_p']")
+    const $person_type_b = $document_from.find("select[name='person_type_b']")
+    let person_type = 'unset'
+    const applicant_name = $document_from.find("input[name='applicant_name']").val()
+    const applicant_callnum = $document_from.find("input[name='applicant_callnum']").val()
+    const applicant_birthday = $document_from.find("input[name='applicant_birthday']").val()
+    const applicant_encrypt_ci = $document_from.find("input[name='applicant_encrypt_ci']").val();
+    let business_type = 'personal'
+    const $sender_callnum_document = $document_from.find("input[name='sender_callnum']")
+	  const $sender_callnum_info_document = $document_from.find("input[name='sender_callnum_info']")
+    const $cert_document_comment = $document_from.find("textarea[name='cert_document_comment']")
+    const $sender_callnum = $document_from.find("input[name='sender_callnum']")
+	  const $sender_callnum_info = $document_from.find("input[name='sender_callnum_info']")
+    const $use_owner_callnum_form = $document_from.find('._use_owner_callnum_form')
+    const owner_callnum = $sender_callnum.attr('data-owner-callnum')
+	  const owner_name = $sender_callnum_info.attr('data-owner-name')
+    const can_use_owner_callnum = $use_owner_callnum_form.length > 0
+    let use_owner_callnum = false
+
+    /* 발신번호 - 제외 숫자만 입력하도록 제한 (number 타입의 경우 스피너 UI가 생기므로 스크립트로 처리 */
+    $sender_callnum.check_key({
+      digit: true,
+      upper: false,
+      lower: false
+    })
+
+    /* 소유자가 아니면 소유자 휴대전화 번호 사용 불가 */
+    if (can_use_owner_callnum) {
+      use_owner_callnum = (person_type === 'p_owner' || person_type === 'b_owner') && ($sender_callnum.val() && owner_callnum && $sender_callnum.val() == owner_callnum)
+    }
+
+    setPersonTypeLayout(business_type, person_type, use_owner_callnum)
+
+    $certification_sender_number.find("input[name='business_type']").click(function () {
+      business_type = this.value
+      person_type = 'unset'
+      use_owner_callnum = false
+      setPersonTypeLayout(business_type, person_type, use_owner_callnum)
+    })
+
+    $person_type_p.change(function () {
+      person_type = this.value
+      if (can_use_owner_callnum) {
+        use_owner_callnum = (person_type === 'p_owner' || person_type === 'b_owner') && ($sender_callnum.val() && owner_callnum && $sender_callnum.val() == owner_callnum)
+      }
+      setPersonTypeLayout(business_type, person_type, use_owner_callnum)
+    })
+
+    $person_type_b.change(function () {
+      person_type = this.value
+      if (can_use_owner_callnum) {
+        use_owner_callnum = (person_type === 'p_owner' || person_type === 'b_owner') && ($sender_callnum.val() && owner_callnum && $sender_callnum.val() == owner_callnum)
+      }
+      setPersonTypeLayout(business_type, person_type, use_owner_callnum)
+    })
+
+    $sender_callnum.change(function () {
+      if (person_type === 'p_owner' || person_type === 'b_owner') {
+        if (can_use_owner_callnum) {
+          use_owner_callnum = this.value && this.value == owner_callnum
+	        $sender_callnum_info_document.val(use_owner_callnum ? owner_name : '')
+        }
+        setPersonTypeLayout(business_type, person_type, use_owner_callnum)
+      }
+    })
+    if (can_use_owner_callnum) {
+      $document_from.find("input[name='use_owner_callnum']").click(function () {
+        if (person_type === 'p_owner' || person_type === 'b_owner') {
+          use_owner_callnum = this.checked
+          $sender_callnum.val(use_owner_callnum ? owner_callnum : '')
+	        ////$sender_callnum_info_document 인풋박스의 내용을 소유주 이름으로 설정
+	        $sender_callnum_info_document.val(use_owner_callnum ? owner_name : '')
+          setPersonTypeLayout(business_type, person_type, use_owner_callnum)
+        }
+      })
+    }
+
+    for (let file_num = 1; file_num <= MAX_CERT_DOCUMENT_NUMBER; file_num++) {
+      const attach_upload_text = $certification_sender_number.find(`._attach${file_num}_upload_text`)
+      $certification_sender_number.find(`._attach${file_num}_upload`).fileupload({
+        url: '/admin/ajax/upload_file.cm',
+        formData: { temp: 'Y' },
+        dataType: 'json',
+        target: 'sms_config',
+        singleFileUploads: true,
+        limitMultiFileUploads: 1,
+        dropZone: false,
+        acceptFileTypes: /(\.|\/)(gif|jpe?g|png|pdf|zip)$/i,
+        start: function (e, data) {
+
+        },
+        progress: function (e, data) {
+
+        },
+        done: function (e, data) {
+          $.each(data.result.files, function (e, tmp) {
+            if (tmp.error == null) {
+              if (file_num === 1) {
+                /* 통신 서비스 이용증명원 등록 시 유효성 체크 (통신판매업 신고증 혼동 방지) */
+                if (tmp.org_name.indexOf('판매업') > -1 || tmp.org_name.indexOf('신고증') > -1) {
+                  alert('통신사에서 1개월 이내 발급받은 통신 서비스 이용증명원을 등록해 주세요.')
+                  return false
+                }
+              }
+              $certification_sender_number.find(`input[name='cert_document_attach${file_num}']`).val(tmp.tmp_idx)
+              attach_upload_text.find('._file_unset').addClass('tw-hidden')
+              /* @TODO GetFileSize 형태 통일 */
+              attach_upload_text.find('._file_size').text(`(${GetFileSize(tmp.size)}) `)
+              attach_upload_text.find('._file_name').text(tmp.org_name)
+              attach_upload_text.find('._file_download').removeClass('tw-hidden')
+              attach_upload_text.find('._file_remove').removeClass('tw-hidden')
+            } else {
+              alert(tmp.error)
+            }
+          })
+        },
+        fail: function (e, data) {
+          alert(getLocalizeString('설명_업로드에실패하였습니다', '', '업로드에 실패 하였습니다.'))
+        }
+      })
+
+      attach_upload_text.find('._file_remove').on('click', function () {
+        $certification_sender_number.find(`input[name='cert_document_attach${file_num}']`).val('')
+        attach_upload_text.find('._file_unset').removeClass('tw-hidden')
+        attach_upload_text.find('._file_size').text('')
+        attach_upload_text.find('._file_name').text('')
+        attach_upload_text.find('._file_download').attr('href', '').addClass('tw-hidden')
+        attach_upload_text.find('._file_remove').addClass('tw-hidden')
+      })
+    }
+
+    // 발신번호 등록 이벤트
+    $cert_save_btn.off('click.cert_save_btn').on('click.cert_save_btn', function () {
+      const person_type = business_type === 'personal' ? $person_type_p.val() : $person_type_b.val()
+      const sender_callnum = $sender_callnum_document.val()
+	    const sender_callnum_info = $sender_callnum_info_document.val()
+      const cert_document_comment = $cert_document_comment.val()
+      const $terms_agree = $certification_sender_number.find('input[name="terms_agree"]')
+      if (person_type === 'unset') {
+        alert('발신번호 명의자를 선택해 주세요.')
+        if (business_type === 'personal') {
+          $person_type_p.focus()
+        } else {
+          $person_type_b.focus()
+        }
+        return false
+      }
+      if (sender_callnum === '') {
+        alert(getLocalizeString('설명_발신번호입력', '', '발신번호를 입력해주세요'))
+        $sender_callnum_document.focus()
+        return false
+      }
+			if (sender_callnum_info === '') {
+				alert('발신번호 명의자 정보를 입력해주세요')
+				$sender_callnum_info_document.focus()
+				return false
+			}
+      if (cert_document_comment === '') {
+        alert(getLocalizeString('설명_요청사유입력', '', '요청사유를 입력해주세요'))
+        $cert_document_comment.focus()
+        return false
+      }
+      const ajax_data = { type: 'DOCUMENT', person_type, sender_callnum, sender_callnum_info, cert_document_comment }
+      if (!use_owner_callnum) {
+        for (let order = 0; order < DOCUMENT_REQUIREMENT_ORDER.length; order++) {
+          const file_num = DOCUMENT_REQUIREMENT_ORDER[order]
+          const $cert_document_attach = $certification_sender_number.find(`input[name='cert_document_attach${file_num}']`)
+          const cert_document_attach = $cert_document_attach.val()
+          if (file_num === 10) { // 추가 서류는 항상 포함되지만 필수는 아님
+            ajax_data[`cert_document_attach${file_num}`] = cert_document_attach
+          } else if (DOCUMENT_REQUIREMENT[business_type][person_type].includes(file_num) || (file_num === 11 && $cert_document_attach.length > 0)) {
+            /* 필수 제출 서류 체크 (관리 위임장은 노출되는 케이스일 때 필수 체크 */
+            const cert_document_attach_name = $certification_sender_number.find(`._attach${file_num}_form > label`).attr('data-title')
+            if (cert_document_attach === '') {
+              alert(`${cert_document_attach_name}을 첨부해주세요.`)
+              $cert_document_attach.focus()
+              return false
+            }
+            ajax_data[`cert_document_attach${file_num}`] = cert_document_attach
+          }
+        }
+      }
+
+      if (!$terms_agree.prop('checked')) {
+        alert('개인정보 수집∙이용에 동의해 주세요.')
+        $terms_agree.focus()
+        return false
+      }
+      ajax_data.applicant_name = applicant_name
+      ajax_data.applicant_callnum = applicant_callnum
+      ajax_data.applicant_birthday = applicant_birthday
+      ajax_data.applicant_encrypt_ci = applicant_encrypt_ci
+
+      $.ajax({
+        type: 'POST',
+        data: ajax_data,
+        url: ('/admin/ajax/member/sender_number_certification_update.cm'),
+        dataType: 'json',
+        async: true,
+        cache: false,
+        success: function (res) {
+          if (res.msg === 'SUCCESS') {
+            $form.find('#sender_callnum').html(res.sender_callnum)
+            if (res.status === 'complete') {
+              $form.find('#sender_status').html(`<span class='text-success'><i style='vertical-align: -10%; margin-left: 8px;' class='icon-check icons'></i> ${getLocalizeString('설명_인증완료', '', '인증 완료')}</span>`)
+              alert('발신번호 등록이 완료되었습니다.')
+            } else {
+              $form.find('#sender_status').html(`<span class='text-warning'><i style='vertical-align: -10%; margin-left: 8px;' class='icon-check icons'></i> ${getLocalizeString('설명_서류인증대기중', '', '서류 인증 대기중')}</span>`)
+              alert('발신번호 서류 인증신청이 완료되었습니다. 3 영업일 이내에 처리될 예정이며 처리가 완료되기 전까진 SMS 발송이 제한됩니다.')
+            }
+            $form.find('._failure_description').remove()
+            $.cocoaDialog.close()
+          } else {
+            alert(res.msg)
+          }
+        }
+      })
+    })
+  }
+
+  /**
+   * 발신번호 서류 인증 요청 폼 레이아웃 설정
+   * @param b_type  사업자 여부 (personal, business)
+   * @param p_type  발신번호 명의자
+   * @param use_owner_callnum  소유자 휴대전화번호 사용 여부 (true, false)
+   */
+  function setPersonTypeLayout (b_type = 'personal', p_type = 'unset', use_owner_callnum = false) {
+    /* 사업자 여부 설정 */
+    $certification_sender_number.find(`input[name='business_type']:not([value='${b_type}'])`).prop('checked', false)
+    $certification_sender_number.find(`input[name='business_type'][value='${b_type}']`).prop('checked', true)
+
+    /* 발신번호 명의자 설정 */
+    const $document_from = $certification_sender_number.find('._document_from')
+    const $person_type_p = $document_from.find("select[name='person_type_p']")
+    const $person_type_b = $document_from.find("select[name='person_type_b']")
+    if (b_type == 'personal') {
+      $person_type_p.removeClass('tw-hidden')
+      $person_type_b.addClass('tw-hidden')
+      $person_type_b.val('unset')
+    } else {
+      $person_type_b.removeClass('tw-hidden')
+      $person_type_p.addClass('tw-hidden')
+      $person_type_p.val('unset')
+    }
+
+    $certification_sender_number.find('._attach_file_form:not(._attach11_form)').addClass('tw-hidden md:tw-hidden')
+    $certification_sender_number.find('._example').removeClass('_lg_target')
+    $certification_sender_number.find('._attach_file_form._attach11_form ._example').addClass('_lg_target') // 관리 위임장이 존재하는 케이스는 항상 노출
+    $certification_sender_number.find('._attach10_form').removeClass('tw-hidden md:tw-hidden') // 추가서류는 항상 노출
+
+    /* 소유자 휴대전화번호 사용 설정 */
+    const $sender_callnum = $document_from.find("input[name='sender_callnum']")
+    const $use_owner_callnum_form = $document_from.find('._use_owner_callnum_form')
+    const $use_owner_callnum = $document_from.find("input[name='use_owner_callnum']")
+    const $required_document_section = $document_from.find('#required_document_section')
+	  const $sender_callnum_info_document = $document_from.find("input[name='sender_callnum_info']")
+    $required_document_section.removeClass('tw-hidden')
+	  $sender_callnum_info_document.prop('disabled', false)
+    let attach3_title = '위임자(타인) 신분증 사본'
+    let attach8_title = '자사 담당자 재직증명서'
+    if (p_type === 'p_owner') {
+      $use_owner_callnum_form.removeClass('tw-hidden')
+      $sender_callnum.prop('disabled', use_owner_callnum)
+      $use_owner_callnum.prop('checked', use_owner_callnum)
+      if (use_owner_callnum) {
+        /* 소유자 휴대전화번호 사용 시 제출 서류 영역 숨김 */
+        $required_document_section.addClass('tw-hidden')
+	      //$sender_callnum_info_document 인풋박스 비활성화
+	      $sender_callnum_info_document.prop('disabled', true)
+        return
+      }
+    } else {
+      if (p_type === 'p_other_company' || p_type === 'b_other_company') {
+        attach3_title = '위임자(타사) 담당자 신분증 사본'
+      }
+      if (p_type === 'b_first_incumbent') {
+        attach8_title = '재직증명서'
+      }
+      $sender_callnum.prop('disabled', false)
+      $use_owner_callnum.prop('checked', false)
+      $use_owner_callnum_form.addClass('tw-hidden')
+    }
+    $required_document_section.find('._attach3_form > label').attr('data-title', attach3_title).find('> span').text(attach3_title)
+    $required_document_section.find('._attach3_form > ._example').attr('data-sub-html', attach3_title + ' 예시')
+    $required_document_section.find('._attach8_form > label').attr('data-title', attach8_title).find('> span').text(attach8_title)
+    $required_document_section.find('._attach8_form > ._example').attr('data-sub-html', attach8_title + ' 예시')
+
+    if (p_type === 'unset') {
+      $required_document_section.addClass('tw-hidden')
+      return
+    }
+
+    /* 제출 서류 설정 */
+    for (const person_type in DOCUMENT_REQUIREMENT[b_type]) {
+      if (person_type === p_type) {
+        for (const document_num in DOCUMENT_REQUIREMENT[b_type][person_type]) {
+          $certification_sender_number.find(`._attach${DOCUMENT_REQUIREMENT[b_type][person_type][document_num]}_form`).removeClass('tw-hidden md:tw-hidden').find('._example').addClass('_lg_target')
+        }
+        break
+      }
+    }
+
+    /* 서류 미리보기 설정 */
+    const lg_data = $document_from.data('lightGallery')
+    if (typeof lg_data !== 'undefined') lg_data.destroy(true)
+    const $lg_target = $document_from.find('._lg_target')
+    if ($lg_target.length > 0) {
+
+      $document_from.lightGallery({
+        selector: '._lg_target',
+        thumbnail: true,
+        hash: false,
+        speed: 200
+      });
+    }
+  }
+
+  const openEditInformation = function () {
+    if (confirm('발신번호를 등록하기 위해서는 휴대전화 본인인증이 필요합니다. 진행하시겠습니까?')) {
+      const url = TEST_SERVER ? 'https://imtest.me/edit_information' : 'https://imweb.me/edit_information'
+      window.open(url, '_blank')
+    }
+  }
+
+  const openAuthService = function (CI_SVCID, Tradeid, Okurl, call_back_data) {
+    if (confirm('발신번호를 등록하기 위해서는 휴대전화 본인인증이 필요합니다. 진행하시겠습니까?')) {
+      AUTH_SERVICE.openMOBILIANSWindow(CI_SVCID, Tradeid, Okurl, call_back_data)
+      const messageEvent = function (e) {
+        if (e.data.authorizedData) {
+          if ( e.data.authorizedData.name &&
+               e.data.authorizedData.call_num &&
+               e.data.authorizedData.birthday &&
+               e.data.authorizedData.encrypt_ci
+              ) {
+            window.removeEventListener('message', messageEvent)
+            openSmsSettingNum(
+				e.data.authorizedData.name,
+	            e.data.authorizedData.call_num,
+	            e.data.authorizedData.birthday,
+	            e.data.authorizedData.encrypt_ci
+            )
+          }
+        }
+      }
+      window.removeEventListener('message', messageEvent)
+      window.addEventListener('message', messageEvent, false)
+    }
+  }
+
+  const group_chang = function (type, $obj, name, code) {
+    let old_text, new_text
+
+    old_text = $obj.find('span').text()
+    $obj.find('span').text(name)
+    new_text = $obj.find('span').text()
+
+    if (name == '지정안함') {
+      $('#group_' + type).val('')
+      $('#group_' + type + '_name').val('')
+    } else {
+      $('#group_' + type).val(code)
+      $('#group_' + type + '_name').val(name)
+    }
+
+    if (old_text != new_text) {
+      header_ctl.change()
+    }
+  }
+
+  var submit = function () {
+    const data = $form.serializeObject()
+    $.ajax({
+      type: 'POST',
+      data,
+      url: ('/admin/ajax/member/sms_setting_update.cm'),
+      dataType: 'json',
+      async: false,
+      cache: false,
+      success: function (res) {
+        if (res.msg == 'SUCCESS') {
+          header_ctl.save()
+        } else {
+          alert(res.msg)
+        }
+      }
+    })
+  }
+
+  const openSmsPreview = function (type) {
+    $.ajax({
+      type: 'GET',
+      data: { type },
+      url: ('/admin/ajax/member/sms_preview.cm'),
+      dataType: 'html',
+      async: false,
+      cache: true,
+      success: function (res) {
+        const $html = $(res)
+        $.cocoaDialog.open({ type: 'admin', custom_popup: $html, width: 600 })
+      }
+    })
+  }
+
+  var openSmsSettingNum = function (name, callnum, birthday, encrypt_ci) {
+    $.cocoaDialog.close()
+    $.ajax({
+      type: 'POST',
+      data: { name, callnum, birthday, encrypt_ci },
+      url: ('/admin/ajax/member/sms_setting_num.cm'),
+      dataType: 'html',
+      async: false,
+      cache: false,
+      success: function (res) {
+				if(res === 'alimtalk progress'){
+					alert("카카오 알림톡 신청 중 발신번호 변경이 불가합니다.\n알림톡 신청이 완료되거나 반려 처리된 후 발신번호 변경을 진행해주세요.")
+				}else{
+					const $html = $(res)
+					$.cocoaDialog.open({ type: 'admin_sms_num', custom_popup: $html, pc_width: 660, close_block: true })
+				}
+      }
+    })
+
+    setSmsCertification()
+  }
+
+  const openSmsChargeComplete = function (sms_count, order_no) {
+    $.ajax({
+      type: 'POST',
+      data: { sms_count, order_no },
+      url: ('/admin/ajax/sms/sms_charge_complete.cm'),
+      dataType: 'html',
+      async: false,
+      cache: false,
+      success: function (html) {
+        $.cocoaDialog.open({ type: 'admin_sms', custom_popup: html })
+      }
+    })
+  }
+
+  const requestChangeKakaoIdModal = function () {
+    $.ajax({
+      type: 'POST',
+      url: '/admin/ajax/open_change_kakao_id_modal.cm',
+      dataType: 'html',
+      async: false,
+      cache: false,
+      success: function (res) {
+        $.cocoaDialog.open({ type: 'admin_sms', custom_popup: res })
+      }
+    })
+  }
+
+  const requestChangeKakaoId = function () {
+    const data = $('#request_form_change_kakao_id').serializeObject()
+    $.ajax({
+      type: 'POST',
+      data: { data },
+      url: '/admin/ajax/sms/request_change_kakao_id.cm',
+      dataType: 'json',
+      async: false,
+      cache: false,
+      success: function (res) {
+        if (res.msg === 'SUCCESS') {
+          // header_ctl.save(); // 저장시 새로고침 컨펌 안뜨게 하기 위해
+          alert('카카오 채널 검색용 아이디가 변경되었습니다.')
+          location.reload()
+        } else {
+          alert('저장에 실패하였습니다. 다시한번 시도해주세요')
+        }
+      }
+    })
+  }
+
+  const openRequestKakaoAlimTalk = function (idx) {
+    $.ajax({
+      type: 'POST',
+      data: { idx },
+      url: ('/admin/ajax/sms/open_kakao_alimtalk_request.cm'),
+      dataType: 'html',
+      async: false,
+      cache: false,
+      success: function (html) {
+        $.cocoaDialog.open({ type: 'admin_sms', custom_popup: html })
+      }
+    })
+  }
+
+  const requestKakaoAlimTalk = function () {
+    const data = $('#request_form_kakao_alimtalk').serializeObject()
+    $.ajax({
+      type: 'POST',
+      data: { data },
+      url: ('/admin/ajax/sms/request_kakao_alimtalk.cm'),
+      dataType: 'json',
+      async: false,
+      cache: false,
+      success: function (res) {
+        if (res.msg === 'SUCCESS') {
+          header_ctl.save() // 저장시 새로고침 컨펌 안뜨게 하기 위해
+          location.reload()
+        } else {
+          alert(res.msg)
+        }
+      }
+    })
+  }
+
+  return {
+    init: function ($obj) {
+      init($obj)
+    },
+    group_chang: function (type, $obj, name, code) {
+      group_chang(type, $obj, name, code)
+    },
+    openSmsPreview: function (type) {
+      openSmsPreview(type)
+    },
+    openSmsSettingNum: function (name, callnum, birthday, encrypt_ci) {
+      openSmsSettingNum(name, callnum, birthday, encrypt_ci)
+    },
+    openEditInformation: function () {
+      openEditInformation()
+    },
+    openAuthService: function (CI_SVCID, Tradeid, Okurl, call_back_data) {
+      openAuthService(CI_SVCID, Tradeid, Okurl, call_back_data)
+    },
+    openSmsChargeComplete: function (sms_count, order_no) {
+      openSmsChargeComplete(sms_count, order_no)
+    },
+    openRequestKakaoAlimTalk: function (idx) {
+      openRequestKakaoAlimTalk(idx)
+    },
+    requestChangeKakaoId: function () {
+      requestChangeKakaoId()
+    },
+    requestChangeKakaoIdModal: function () {
+      requestChangeKakaoIdModal()
+    },
+    requestKakaoAlimTalk: function () {
+      requestKakaoAlimTalk()
+    }
+  }
+}())
+const MEMBER_BLOCK = (function () {
+  const openBlockMember = function (member_code, block_member_code, site_code) {
+    $.ajax({
+      type: 'post',
+      data: {
+        member_code,
+        block_member_code,
+        site_code
+      },
+      url: '/admin/ajax/member/delete_block_member.cm',
+      dataType: 'html',
+      async: false,
+      cache: false,
+      success: function (html) {
+        $.cocoaDialog.open({ type: 'admin', custom_popup: html })
+      }
+    })
+  }
+  const deleteBlock = function (member_code, block_member_code, site_code) {
+    $.ajax({
+      type: 'post',
+      data: {
+        member_code,
+        block_member_code,
+        site_code
+      },
+      url: '/admin/ajax/member/delete_block.cm',
+      dataType: 'json',
+      async: false,
+      cache: false,
+      success: function (res) {
+        if (res.msg === 'SUCCESS') {
+          // header_ctl.save(); // 저장시 새로고침 컨펌 안뜨게 하기 위해
+          location.reload()
+        } else {
+          alert(res.msg)
+        }
+      }
+    })
+  }
+  return {
+    openBlockMember: function (member_code, block_member_code, site_code) {
+      openBlockMember(member_code, block_member_code, site_code)
+    },
+    deleteBlock: function (member_code, block_member_code, site_code) {
+      deleteBlock(member_code, block_member_code, site_code)
+    }
+  }
+}())
+
+var MEMBER_DATA = (function () {
+  let $totalCount
+  let $SITE_CODE
+  let $UNIT_CODE
+  let $KEYWORD
+  let $MEMBER_GROUP
+  let $PERMISSIONS
+  let $BASEURL
+  let $PAGE
+  let $LOADING = false
+  let $USE_PUSH_STATE = false
+  let $groups = []
+  let $memberListRender
+  const init = function (site_code, unit_code, keyword, member_group, permissions, base_url, current_page) {
+    $SITE_CODE = site_code
+    $UNIT_CODE = unit_code
+    $KEYWORD = keyword
+    $MEMBER_GROUP = member_group
+    $PERMISSIONS = permissions
+    $BASEURL = base_url
+    $PAGE = current_page
+    renderMemberTotalCount()
+    renderGroup()
+    renderList(keyword, member_group, permissions, base_url, current_page)
+  }
+
+  /**
+	 * @param site_code
+	 * @param unit_code
+	 * @param keyword
+	 * @param member_group
+	 */
+  var renderList = function (keyword, member_group, permissions, base_url, current_page) {
+    $KEYWORD = keyword
+    $MEMBER_GROUP = member_group
+    $BASEURL = base_url
+    $PAGE = current_page
+
+    var permissions = JSON.parse($PERMISSIONS)
+    $LOADING = true
+
+    let isEdit = false
+    let _href = 'javascript:;'
+    let _onClick = 'alert(LOCALIZE_ADMIN.설명_권한이없습니다())'
+    if (permissions.admin_member || permissions.manager_setting) {
+      isEdit = true
+      _onClick = ''
+    }
+
+    const _key = 'MEMBER_LIST_' + $SITE_CODE
+    TOKEN.makeToken(5, _key, function (token, tokenKey) {
+      $memberListRender = $.ajax({
+        url: '/admin/ajax/member/get_member.cm',
+        type: 'GET',
+        data: { keyword, page: current_page, member_group, token, token_key: tokenKey },
+        dataType: 'json',
+        async: true,
+        cache: false,
+        success: function (result) {
+          $('#table-header').css('display', '');
+          $('#card-head').show()
+          $('#order_list_loader_sub').hide()
+
+          if (result.message) {
+            alert(result.message)
+            return
+          }
+
+          $('#total-member-count').text(result.member_count)
+
+          result.members.forEach(function (member) {
+            if (isEdit) {
+              _href = base_url + '&mode=add&idx=' + member.idx
+            }
+            let html = '<ul class="content _tbody" id="member_item_' + member.code + '" data-nick="' + member.name + '" data-app="">'
+            html += '<li class="check">' +
+							'<div class="checkbox checkbox-styled no-margin">' +
+							'<label>' +
+							'<input type="checkbox" value="' + member.code + '"' +
+							'   data-idx="' + member.idx + '"' +
+							'   data-code="' + member.code + '"' +
+							' onclick="TABLE_LIST.checkItem(function(idxs){MEMBER_GROUP.checkMember(idxs);});" />' +
+							'<span></span>' +
+							'</label>' +
+							'</div>' +
+							'</li>'
+
+            // =======================================================
+            html += '<li class="nick">'
+
+            if (member.units) {
+              if (member.units === 'notfound') {
+                html += '<span style="margin-right:5px; width: 20px;\n' +
+									'    height: 20px;\n' +
+									'    display: inline-block;\n' +
+									'    background: #fff;\n' +
+									'    border: 1px solid #ccc;\n' +
+									'    text-align: center;\n' +
+									'    border-radius: 50%;"><i class="im-icon im-ico-global" style="display: inline-block;\n' +
+									'    margin-top: 3px;\n' +
+									'    font-size: 10px;"></i></span>'
+              } else {
+                html += '<img src="' + member.units + '" style="width:20px; margin-right: 5px;">'
+              }
+            }
+
+            html += '<a data-mixpanel="click_bo_member_list_detail" href="' + _href + '" onclick="' + _onClick + '">'
+            html += member.name
+
+            if (member.is_member_inactive > 0) {
+              html += '<span class="badge style-primary" style="margin-left: 5px;">' + getLocalizeString('설명_휴면예정', '', '휴면 예정') + '</span>'
+            }
+
+            if (member.is_admin) {
+              html += '<span class="badge">' + getLocalizeString('설명_소유자', '', '소유자') + '</span>'
+            } else {
+              if (result.join_types.join_type_allow_type_list[member.join_type_code] !== 'auto' && !member.is_confirm) {
+                if (result.join_types.join_type_allow_type_list[member.join_type_code] === 'email') {
+                  html += '<span class="badge style-primary">' + getLocalizeString('설명_메일미인증', '', '메일 미인증') + '</span>'
+                } else {
+                  html += '<span class="badge style-primary">' + getLocalizeString('설명_승인대기', '', '승인 대기') + '</span>'
+                }
+              }
+            }
+            html += '</a></li>'
+
+            // =======================================================
+
+            html += '<li class="account"><a data-mixpanel="click_bo_member_list_detail" href="' + _href + '" onclick="' + _onClick + '">' + member.uid + '</a></li>'
+
+            // =======================================================
+
+            if (member.join_type_code) {
+              html += '<li class="account">' + result.join_types.join_type_name_list[member.join_type_code] + '</li>'
+            } else {
+              html += '<li class="account"></li>'
+            }
+
+            // =======================================================
+
+            let _group = ''
+            html += '<li class="group"><div class="dropdown">'
+            if (member.groups.has_group) {
+              _group = member.groups.data.main_group_title
+              if (member.groups.count > 1) {
+                _group += '<span class="text-primary"> +' + (member.groups.count - 1) + '</span>'
+              }
+            } else {
+              _group = getLocalizeString('설명_그룹없음', '', '그룹 없음')
+            }
+            if (isEdit) {
+              html += '<button id="dLabel" type="button" onclick="MEMBER_GROUP.setGroupCheck(' + member.idx + ')" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" class="btn-flat no-padding _drop_group_btn_' + member.idx + '">' +
+								_group +
+								'</button>' +
+								'<ul class="dropdown-menu animation-dock check" role="menu" aria-labelledby="dLabel">' +
+								'<div class="select_group _drop_group_list _drop_group_list_' + member.idx + '"' +
+								'data-member="' + member.idx + '"'
+
+              if (member.groups.has_group && member.groups._group_arr) {
+                html += 'data-groups="['
+                html += member.groups._group_arr.join(',')
+                html += ']"'
+              } else {
+                html += 'data-groups=""'
+              }
+
+              if (member.groups.has_group && member.groups._subscribe_group_arr) {
+                html += 'data-subscribe_groups="'
+                html += member.groups._subscribe_group_arr.join(',')
+                html += '"'
+              } else {
+                html += 'data-subscribe_groups=""'
+              }
+
+              html += 'data-nogroup="'
+              if (member.groups.count === 0) {
+                html += 'Y"'
+              } else {
+                html += 'N"'
+              }
+              html += '></div>' +
+								'<div class="footer">' +
+								'<li class="divider"></li>' +
+								'<li>' +
+								'<a href="javascript:;" onclick="MEMBER_GROUP.openGroupForm()">' + getLocalizeString('설명_새그룹', '', '새 그룹') + '</a>' +
+								'</li>' +
+								'</div>' +
+								'</ul>'
+            } else {
+              html += '<a href="' + _href + '" onclick="' + _onClick + '">' + _group + '</a>'
+            }
+            html += '</div></li>'
+
+            if (result.shopping_groups.is_shopping_group) {
+              html += '<li class="rating"><div class="dropdown">'
+              if (isEdit) {
+                html += '<button type="button" data-toggle="dropdown" aria-haspopup="true" onclick="MEMBER_GROUP.setShoppingGroupCheck(' + member.idx + ')" aria-expanded="false" class="btn-flat no-padding _drop_shopping_group_btn_' + member.idx + '">' + member.shopping_groups.title + '</button>' +
+									'<ul class="dropdown-menu animation-dock check" role="menu">' +
+									'<div class="select_group _drop_shopping_group_list _drop_shopping_group_list_' + member.idx + '"' +
+									'data-groups="['
+                html += member.shopping_groups.idx
+                html += ']" data-member="' + member.idx + '" data-nogroup="'
+                if (member.groups.count === 0) {
+                  html += 'Y'
+                } else {
+                  html += 'N'
+                }
+                html += '">' +
+									'</div>' +
+									'<div class="footer">' +
+									'<li class="divider"></li>' +
+									'<li><a href="javascript:;" onclick="MEMBER_GROUP.openGroupForm(\'\', \'' + member.shopping_groups.group_type + '\')">' +
+									getLocalizeString('설명_새그룹', '', '새 그룹') + '</a></li>' +
+									'</div>\n' +
+									'</ul></li>'
+                html += '</div></li>'
+              } else {
+                html += member.shopping_groups.title + '</div></li>'
+              }
+            }
+
+            // =======================================================
+
+            html += '<li class="date_join">' + member.join_time_message + '</li>'
+
+            // =======================================================
+
+            html += '<li class="date_mileage text-right">' + member.point.message + '</li>'
+
+            // =======================================================
+
+            html += '<li class="count_post hidden-xs hidden-sm">' + member.post_count + '/ ' +
+							member.comment_count + '/ ' + member.review_count + '/ ' + member.qna_count + '</li>'
+
+            // =======================================================
+
+            html += '<li class="purchase text-right hidden-xs hidden-sm">' + member.purchase.message + '</li>'
+
+            // =======================================================
+
+            html += '<li class="memo">'
+            if (member.is_admin_memo) {
+              html += '<a href="javascript:;" onclick="adminMember.openAdminMemoForm(' + '\'' + member.code + '\'' + ')" class="btn btn-flat">'
+            } else {
+              html += '<a href="javascript:;" onclick="adminMember.openAdminMemoForm(' + '\'' + member.code + '\'' + ')" class="btn btn-flat text-gray-bright">'
+            }
+            html +=	'<i class="icon-note"></i>'
+            if (member.is_admin_memo) {
+              html += '<div class="admin_memo">' + member.admin_memo + '</div>'
+            }
+            html +=	'</a></li>'
+
+            // =======================================================
+
+            if (member.is_use_android) {
+              html += '<li class="app_android hidden-xs hidden-sm"><i class="zmdi zmdi-google-play"></i></li>'
+            } else {
+              html += '<li class="app_android hidden-xs hidden-sm"></li>'
+            }
+
+            // =======================================================
+
+            if (member.is_use_ios) {
+              html += '<li class="app_ios hidden-xs hidden-sm"><i class="zmdi zmdi-apple"></i></li>'
+            } else {
+              html += '<li class="app_ios hidden-xs hidden-sm"></li>'
+            }
+
+            // =======================================================
+
+            html += '<li class="action"><div class="dropdown">' +
+							'<button id="dLabel" type="button" data-toggle="dropdown"' +
+							'aria-haspopup="true" aria-expanded="false"' +
+							'class="btn btn-flat">' +
+							'<i class="zmdi zmdi-more"></i>' +
+							'</button>' +
+							'<ul class="dropdown-menu animation-dock right" role="menu" aria-labelledby="dLabel">'
+
+            if (member.is_admin !== 'Y' && result.join_types.join_type_allow_type_list[member.join_type_code] !== 'auto' && !member.is_confirm) {
+              html += '<li>' +
+								'<a href="javascript:;" onclick="adminMember.openUpdateMemberConfirm(' + '\'' + member.code + '\'' + ', ' + '\'' + 'list' + '\'' + ');">' +
+								getLocalizeString('버튼_가입승인', '', '가입 승인') +
+								'</a>' +
+								'</li>' +
+								'<li role="separator" class="divider"></li>'
+            }
+
+            const deleteMember = [{
+              member_code: member.code,
+              delete_old_auth_log: !!member.delete_old_auth_log
+            }]
+
+            html += '<li>' +
+							'<a href="javascript:;" data-mixpanel="click_bo_member_list_delete_item" data-button-position="dropdown" onclick=\'adminMember.openDeleteMember("' + JSON.stringify(deleteMember).replace(/"/g, '\\"') + '")\'>' +
+							getLocalizeString('버튼_삭제', '', '삭제') +
+							'</a>' +
+							'</li>' +
+							'<li>' +
+							'<a href="javascript:;" onclick="adminMember.openMemberPushForm([' + '\'' + member.code + '\'' + ']);">' +
+							getLocalizeString('버튼_알림', '', '알림') +
+							'</a>' +
+							'</li>' +
+							'<li>' +
+							'<a href="javascript:;" onclick="adminMember.openMemberSmsForm([' + '\'' + member.code + '\'' + ']);">' +
+							'SMS' +
+							'</a>' +
+							'</li>' +
+							'<li>' +
+							'<a href="javascript:;" onclick="adminMember.openManageMemberPoint(' + '\'' + member.code + '\'' + ');">' +
+							getLocalizeString('버튼_적립금지급차감', '', '적립금 지급/차감') +
+							'</a>' +
+							'</li>' +
+							'</ul>' +
+							'</li>'
+            html += '</ul>'
+
+            $('#UI_TABLE').append(html)
+          })
+
+          // 만약 renderGroup 이 늦게 반환되어 있으면 이를 처리합니다.
+          if (!$groups) {
+            var interval = setInterval(function () {
+              if ($groups) {
+                clearInterval(interval)
+              }
+            }, 10)
+          }
+
+          $groups.forEach(function (group) {
+            MEMBER_GROUP.addDropGroupList(group)
+          })
+
+          TABLE_LIST.init($('#UI_TABLE'))
+
+          // paginate
+          $('#paginate').append(result.paginate)
+
+          $LOADING = false
+
+          const qs = MEMBER_DATA.getUrlParams()
+          if (qs && qs.mc) {
+            $('html, body').animate({ scrollTop: $('#member_item_' + qs.mc).offset().top - 55 }, 0)
+          }
+        },
+        error: function (req, textStatus, error) {
+          if (req.statusText === 'abort') {
+            return
+          }
+
+          alert(getLocalizeString('설명_잠시후다시시도해주세요', '', '잠시 후 다시 시도해주세요.'))
+        }
+      })
+    })
+  }
+
+  var renderGroup = function () {
+    $.ajax({
+      url: '/admin/ajax/member/get_group.cm',
+      type: 'GET',
+      dataType: 'json',
+      async: true,
+      cache: false,
+      success: function (result) {
+        if (result.groups) {
+          $groups = result.groups
+          $groups.forEach(function (group) {
+            MEMBER_GROUP.addGroupList(group)
+          })
+        }
+
+        renderGroupCount()
+      },
+      error: function () {
+        alert(getLocalizeString('설명_잠시후다시시도해주세요', '', '잠시 후 다시 시도해주세요.'))
+      }
+    })
+  }
+
+  var renderGroupCount = function (changed_member_groups) {
+    if (!changed_member_groups) {
+      changed_member_groups = []
+    }
+
+    $groupCountRender = $.ajax({
+      url: '/admin/ajax/member/get_group_count.cm',
+      type: 'GET',
+      data: {
+        changed_member_groups
+      },
+      dataType: 'json',
+      async: true,
+      cache: false,
+      success: function (result) {
+        if (result.nogroup_cnt) {
+				  $('#total-no-group-count').text(result.nogroup_cnt)
+        }
+        result.groups.forEach(function (group) {
+          const $selector = $('#group_item_count_' + group.code)
+          if ($selector.length > 0) {
+            $selector.text(group.member_cnt)
+            MEMBER_GROUP.setGroupMemberCount(group)
+          }
+        })
+      },
+      error: function (req, textStatus, error) {
+        if (req.statusText === 'abort') {
+          return
+        }
+
+        alert(getLocalizeString('설명_잠시후다시시도해주세요', '', '잠시 후 다시 시도해주세요.'))
+      }
+    })
+  }
+
+  var renderMemberTotalCount = function () {
+    $totalCountRender = $.ajax({
+      url: '/admin/ajax/member/get_total_count.cm',
+      type: 'GET',
+      dataType: 'json',
+      async: true,
+      cache: false,
+      success: function (result) {
+        var interval = setInterval(function () {
+          const $selector = $('#total-left-member-count')
+          if ($selector.length > 0) {
+            $totalCount = result.count
+            $selector.text(result.count)
+            clearInterval(interval)
+          }
+        }, 1)
+      },
+      error: function (req, textStatus, error) {
+        if (req.statusText === 'abort') {
+          return
+        }
+
+        alert(getLocalizeString('설명_잠시후다시시도해주세요', '', '잠시 후 다시 시도해주세요.'))
+      }
+    })
+  }
+
+  /**
+	 *
+	 * @param state
+	 * @param title
+	 * @param url
+	 * @param mode
+	 * @param code
+	 * @param page
+	 */
+  function changeUrl (state, title, url, mode, code, page) {
+    if (typeof (history.pushState) === 'undefined') {
+      location.href = url
+      return
+    }
+
+    // 데이터를 불러올 때 다른 메뉴 이동이 불가능하도록 -> xhr disconnect 되도록 개선
+    if ($LOADING) {
+      $memberListRender.abort()
+    } else {
+      renderMemberTotalCount()
+      renderGroupCount()
+    }
+
+    $LOADING = true
+
+    if ($("input[name='keyword']").val()) {
+      $KEYWORD = $("input[name='keyword']").val()
+
+      if (mode === 'group') { // 그룹 이동의 경우 clear keyword
+        $("input[name='keyword']").val('')
+        $KEYWORD = ''
+      }
+    } else {
+      $KEYWORD = ''
+    }
+
+    if (mode === 'group' || mode === 'search' || mode === 'paginate') {
+      if ($('#UI_TABLE').find('.content').length > 0) {
+			  TABLE_LIST.cancelCheckItem()
+      }
+      $('#card-head').hide()
+      $('#table-header').css('display', 'none');
+
+      // 기존 데이터 클리어
+      $('.content').html('')
+      TABLE_LIST.init($('#UI_TABLE'))
+      $('#paginate').html('')
+
+      $('#order_list_loader_sub').show()
+
+      $PAGE = page
+    }
+
+    if (mode === 'group' || mode === 'search') {
+      $('#group_list').find('.active').removeClass('active')
+      $('#group_list').find('.checked').removeClass('checked')
+
+      if (!code) {
+        $('#group_item_total').addClass('active checked')
+      } else {
+        if (code === 'shopping') {
+          $('#shopping_group_default').addClass('active checked')
+        } else {
+          $('#group_item_' + code).addClass('active checked')
+        }
+      }
+      _member_group = code
+
+      renderList($KEYWORD, code, $PERMISSIONS, $BASEURL, $PAGE)
+    } else if (mode === 'paginate') {
+      renderList($KEYWORD, code, $PERMISSIONS, $BASEURL, $PAGE)
+    }
+
+    $USE_PUSH_STATE = true
+    history.pushState(state, title, url)
+    MEMBER_GROUP.setCurrentMemberCode(code)
+  }
+
+  return {
+    init: function (site_code, unit_code, keyword, member_group, permissions, base_url, current_page) {
+      return init(site_code, unit_code, keyword, member_group, permissions, base_url, current_page)
+    },
+    changeUrl: function (state, title, url, mode, code, page) {
+      return changeUrl(state, title, url, mode, code, page)
+    },
+    getUsePushState: function () {
+      return typeof (history.pushState) !== 'undefined'
+    },
+    renderGroupCount: function (changed_member_groups) {
+      // MEMBER_GROUP.resetGroupListHtml();
+      return renderGroupCount(changed_member_groups)
+    },
+    getUrlParams: function () {
+      const params = {}
+
+      window.location.search.replace(/[?&]+([^=&]+)=([^&]*)/gi,
+        function (str, key, value) {
+          params[key] = value
+        }
+      )
+
+      return params
+    }
+  }
+}())

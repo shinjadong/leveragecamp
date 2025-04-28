@@ -1,0 +1,47 @@
+.panel-heading,
+.panel-body {
+	padding: 20px 24px;
+}
+.panel-group .panel-default .panel-heading {
+	transition: background-color ease 0.3s;
+}
+.panel-group .panel-default a:not(.collapsed) .panel-heading {
+	background: rgba(26, 109, 255, 0.05);
+}
+.panel-default .panel-heading h4 {
+	font-size: 14px;
+	margin-right: 24px;
+}
+.panel-default a .panel-heading h4 i {
+	position: absolute;
+	right: 16px;
+	top: 50%;
+	margin-top: -7px;
+}
+.panel,
+.panel-default .panel-heading,
+.panel-default .panel-heading + .panel-collapse > .panel-body {
+	border-color: #eee;
+}
+.panel-default .panel-heading + .panel-collapse.collapsing > .panel-body,
+.panel-default .panel-heading + .panel-collapse.in > .panel-body {
+	border-color: transparent;
+}
+.panel-default a:not(.collapsed) .icon-arrow-down:before {
+	content: "\e607";
+}
+.panel-group .panel, .panel-group .panel + .panel {
+	border: 1px solid #eee;
+	margin-bottom: 10px;
+}
+@media (max-width: 768px) {
+	.panel-body img {
+		max-width: 100%;
+		width: 100% !important;
+		height: auto !important;
+	}
+	.panel-heading,
+	.panel-body {
+		padding: 14px 16px;
+	}
+}
