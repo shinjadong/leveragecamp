@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { connectToDB } from "@/lib/db";
 import Lecture from "@/models/Lecture";
 import { auth } from "@/auth";
-import { authOptions, isAdmin } from "@/lib/auth";
+import { authOptions, isAdmin } from "@/migration/lib/auth";
 
 /**
  * 특정 강의 조회 API

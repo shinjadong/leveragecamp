@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { connectToDB } from "@/lib/db";
 import Notification from "@/models/Notification";
 import { auth } from "@/auth";
-import { authOptions, isAdmin } from "@/lib/auth";
+import { authOptions, isAdmin } from "@/migration/lib/auth";
 
 /**
  * 공지사항 목록 조회 API

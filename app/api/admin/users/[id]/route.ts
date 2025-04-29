@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { connectToDB } from "@/lib/db";
 import User from "@/models/User";
 import { auth } from "@/auth";
-import { authOptions, isAdmin } from "@/lib/auth";
+import { authOptions, isAdmin } from "@/migration/lib/auth";
 import bcrypt from "bcryptjs";
 
 /**

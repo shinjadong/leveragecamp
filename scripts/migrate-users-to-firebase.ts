@@ -105,7 +105,7 @@ async function migrate() {
             createdAt: new Date(),
             updatedAt: new Date(),
           };
-          await adminDb.collection('users').doc(userRecord.uid).set(userDoc);
+          await adminDb.collection('leverage-users').doc(userRecord.uid).set(userDoc);
           results.push({ email, uid: userRecord.uid });
           console.log(`회원 등록 완료: ${name} (${email})`);
         } catch (error: unknown) {
