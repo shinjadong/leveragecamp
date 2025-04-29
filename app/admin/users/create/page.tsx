@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,15 +10,39 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { z } from "zod";
+import { toast } from "react-hot-toast";
 
 /**
  * 회원 추가 페이지
  */
+
+// 회원 정보 타입 정의
+interface UserData {
+  name: string;
+  email: string;
+  password: string;
+  confirmPassword: string;
+  phone: string;
+  points: number;
+  status: 'active' | 'inactive';
+  address: string;
+  birthdate: string;
+  gender: '남성' | '여성' | '기타' | '';
+  occupation: string;
+  interests: string[];
+  bio: string;
+}
+
+// 에러 상태 타입 정의
+type ErrorState = {
+  [K in keyof UserData]?: string;
+};
+
 export default function UserCreatePage() {
   const router = useRouter();
 
   // 회원 정보 상태
-  const [user, setUser] = useState({
+  const [user, setUser] = useState<UserData>({
     name: "",
     email: "",
     password: "",
@@ -30,12 +54,12 @@ export default function UserCreatePage() {
     birthdate: "",
     gender: "",
     occupation: "",
-    interests: [] as string[],
+    interests: [],
     bio: "",
   });
 
-  // 오류 상태
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  // 에러 메시지 상태
+  const [errors, setErrors] = useState<ErrorState>({});
 
   // 사용 가능한 관심사 목록
   const availableInterests = [
@@ -71,33 +95,75 @@ export default function UserCreatePage() {
     path: ["confirmPassword"],
   });
 
-  // 폼 제출 핸들러
-  const handleSubmit = (e: React.FormEvent) => {
+  // 폼 제출 처리
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    
+    await submitForm();
+  };
+
+  const handleCancel = () => {
+    router.back();
+  };
+
+  const submitForm = async () => {
+    // 입력값 검증
+    if (!user.name) {
+      toast.error("이름을 입력해주세요");
+      return;
+    }
+    if (!user.email) {
+      toast.error("이메일을 입력해주세요");
+      return;
+    }
+    if (!user.email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
+      toast.error("올바른 이메일 형식이 아닙니다");
+      return;
+    }
+    if (!user.password) {
+      toast.error("비밀번호를 입력해주세요");
+      return;
+    }
+    if (user.password !== user.confirmPassword) {
+      toast.error("비밀번호가 일치하지 않습니다");
+      return;
+    }
+    if (!user.phone) {
+      toast.error("전화번호를 입력해주세요");
+      return;
+    }
+    if (isNaN(user.points)) {
+      toast.error("포인트는 숫자만 입력 가능합니다");
+      return;
+    }
+    if (user.birthdate && !user.birthdate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      toast.error("생년월일은 YYYY-MM-DD 형식으로 입력해주세요");
+      return;
+    }
+
     try {
-      // 유효성 검사
-      userSchema.parse(user);
-      
-      // 실제로는 API 호출로 회원 추가
-      alert("새로운 회원이 추가되었습니다.");
-      router.push("/admin/users");
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        // Zod 오류 처리
-        const formattedErrors: Record<string, string> = {};
-        error.errors.forEach((err) => {
-          if (err.path) {
-            formattedErrors[err.path[0]] = err.message;
-          }
-        });
-        setErrors(formattedErrors);
+      const response = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(user),
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(error);
       }
+
+      toast.success("사용자가 성공적으로 생성되었습니다");
+      router.push('/admin/users');
+    } catch (error) {
+      console.error('Error creating user:', error);
+      toast.error(error instanceof Error ? error.message : "사용자 생성 중 오류가 발생했습니다");
     }
   };
 
   // 회원 정보 변경 핸들러
-  const handleChange = (field: string, value: any) => {
+  const handleChange = (field: keyof UserData, value: UserData[keyof UserData]) => {
     setUser({ ...user, [field]: value });
     // 필드 변경 시 해당 필드의 오류 메시지 제거
     if (errors[field]) {
@@ -109,11 +175,11 @@ export default function UserCreatePage() {
   const toggleInterest = (interest: string) => {
     if (user.interests.includes(interest)) {
       handleChange(
-        "interests",
+        "interests" as keyof UserData,
         user.interests.filter((i) => i !== interest)
       );
     } else {
-      handleChange("interests", [...user.interests, interest]);
+      handleChange("interests" as keyof UserData, [...user.interests, interest]);
     }
   };
 
@@ -127,10 +193,10 @@ export default function UserCreatePage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => router.back()}>
+          <Button variant="outline" onClick={handleCancel}>
             취소
           </Button>
-          <Button onClick={handleSubmit}>저장</Button>
+          <Button type="submit">저장</Button>
         </div>
       </div>
 
@@ -152,7 +218,7 @@ export default function UserCreatePage() {
                 <Input
                   id="name"
                   value={user.name}
-                  onChange={(e) => handleChange("name", e.target.value)}
+                  onChange={(e) => handleChange("name" as keyof UserData, e.target.value)}
                   className={errors.name ? "border-red-500" : ""}
                 />
                 {errors.name && (
@@ -167,7 +233,7 @@ export default function UserCreatePage() {
                   id="email"
                   type="email"
                   value={user.email}
-                  onChange={(e) => handleChange("email", e.target.value)}
+                  onChange={(e) => handleChange("email" as keyof UserData, e.target.value)}
                   className={errors.email ? "border-red-500" : ""}
                 />
                 {errors.email && (
@@ -182,7 +248,7 @@ export default function UserCreatePage() {
                   id="password"
                   type="password"
                   value={user.password}
-                  onChange={(e) => handleChange("password", e.target.value)}
+                  onChange={(e) => handleChange("password" as keyof UserData, e.target.value)}
                   className={errors.password ? "border-red-500" : ""}
                 />
                 {errors.password && (
@@ -197,7 +263,7 @@ export default function UserCreatePage() {
                   id="confirmPassword"
                   type="password"
                   value={user.confirmPassword}
-                  onChange={(e) => handleChange("confirmPassword", e.target.value)}
+                  onChange={(e) => handleChange("confirmPassword" as keyof UserData, e.target.value)}
                   className={errors.confirmPassword ? "border-red-500" : ""}
                 />
                 {errors.confirmPassword && (
@@ -209,7 +275,7 @@ export default function UserCreatePage() {
                 <Input
                   id="phone"
                   value={user.phone}
-                  onChange={(e) => handleChange("phone", e.target.value)}
+                  onChange={(e) => handleChange("phone" as keyof UserData, e.target.value)}
                 />
               </div>
               <div className="space-y-2">
@@ -218,7 +284,7 @@ export default function UserCreatePage() {
                   id="points"
                   type="number"
                   value={user.points}
-                  onChange={(e) => handleChange("points", parseInt(e.target.value))}
+                  onChange={(e) => handleChange("points" as keyof UserData, parseInt(e.target.value))}
                   className={errors.points ? "border-red-500" : ""}
                 />
                 {errors.points && (
@@ -229,7 +295,7 @@ export default function UserCreatePage() {
                 <Label htmlFor="status">상태</Label>
                 <Select
                   value={user.status}
-                  onValueChange={(value) => handleChange("status", value)}
+                  onValueChange={(value) => handleChange("status" as keyof UserData, value as 'active' | 'inactive')}
                 >
                   <SelectTrigger id="status">
                     <SelectValue placeholder="상태 선택" />
@@ -246,14 +312,14 @@ export default function UserCreatePage() {
                   id="birthdate"
                   type="date"
                   value={user.birthdate}
-                  onChange={(e) => handleChange("birthdate", e.target.value)}
+                  onChange={(e) => handleChange("birthdate" as keyof UserData, e.target.value)}
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="gender">성별</Label>
                 <Select
                   value={user.gender}
-                  onValueChange={(value) => handleChange("gender", value)}
+                  onValueChange={(value) => handleChange("gender" as keyof UserData, value as '남성' | '여성' | '기타' | '')}
                 >
                   <SelectTrigger id="gender">
                     <SelectValue placeholder="성별 선택" />
@@ -270,7 +336,7 @@ export default function UserCreatePage() {
                 <Input
                   id="occupation"
                   value={user.occupation}
-                  onChange={(e) => handleChange("occupation", e.target.value)}
+                  onChange={(e) => handleChange("occupation" as keyof UserData, e.target.value)}
                 />
               </div>
               <div className="space-y-2 md:col-span-2">
@@ -278,7 +344,7 @@ export default function UserCreatePage() {
                 <Input
                   id="address"
                   value={user.address}
-                  onChange={(e) => handleChange("address", e.target.value)}
+                  onChange={(e) => handleChange("address" as keyof UserData, e.target.value)}
                 />
               </div>
               <div className="space-y-2 md:col-span-2">
@@ -286,7 +352,7 @@ export default function UserCreatePage() {
                 <Textarea
                   id="bio"
                   value={user.bio}
-                  onChange={(e) => handleChange("bio", e.target.value)}
+                  onChange={(e) => handleChange("bio" as keyof UserData, e.target.value)}
                   rows={3}
                 />
               </div>
@@ -325,7 +391,7 @@ export default function UserCreatePage() {
 
         {/* 하단 버튼 */}
         <div className="flex justify-end gap-2">
-          <Button variant="outline" onClick={() => router.back()}>
+          <Button variant="outline" onClick={handleCancel}>
             취소
           </Button>
           <Button type="submit">저장</Button>

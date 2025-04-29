@@ -1,16 +1,33 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+
+// 사용자 정보 타입 정의
+interface UserData {
+  id: number;
+  name: string;
+  email: string;
+  phone: string;
+  joinDate: string;
+  points: number;
+  status: 'active' | 'inactive';
+  profileImage: string;
+  address: string;
+  birthdate: string;
+  gender: '남성' | '여성' | '기타';
+  occupation: string;
+  interests: string[];
+  bio: string;
+}
 
 /**
  * 회원 정보 수정 페이지
@@ -21,7 +38,7 @@ export default function UserEditPage() {
   const userId = params.id as string;
 
   // 회원 정보 상태
-  const [user, setUser] = useState({
+  const [user, setUser] = useState<UserData>({
     id: parseInt(userId),
     name: "김철수",
     email: "chulsoo@example.com",
@@ -61,7 +78,7 @@ export default function UserEditPage() {
   };
 
   // 회원 정보 변경 핸들러
-  const handleChange = (field: string, value: any) => {
+  const handleChange = (field: keyof UserData, value: UserData[keyof UserData]) => {
     setUser({ ...user, [field]: value });
   };
 
@@ -153,7 +170,7 @@ export default function UserEditPage() {
                   <Label htmlFor="status">상태</Label>
                   <Select
                     value={user.status}
-                    onValueChange={(value) => handleChange("status", value)}
+                    onValueChange={(value) => handleChange("status", value as 'active' | 'inactive')}
                   >
                     <SelectTrigger id="status">
                       <SelectValue placeholder="상태 선택" />
@@ -177,7 +194,7 @@ export default function UserEditPage() {
                   <Label htmlFor="gender">성별</Label>
                   <Select
                     value={user.gender}
-                    onValueChange={(value) => handleChange("gender", value)}
+                    onValueChange={(value) => handleChange("gender", value as '남성' | '여성' | '기타')}
                   >
                     <SelectTrigger id="gender">
                       <SelectValue placeholder="성별 선택" />

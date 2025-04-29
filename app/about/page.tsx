@@ -164,7 +164,7 @@ export default function AboutPage() {
             <h3 className="text-2xl font-bold mb-4">비전</h3>
             <CardContent className="p-0">
               <p className="text-gray-500 dark:text-gray-400">
-                "디지털 시대에 누구나 자신만의 비즈니스를 성공적으로 운영할 수 있는 세상을 만든다"
+                &ldquo;디지털 시대에 누구나 자신만의 비즈니스를 성공적으로 운영할 수 있는 세상을 만든다&rdquo;
               </p>
               <p className="mt-4">
                 레버리지캠프는 디지털 기술과 온라인 비즈니스의 민주화를 통해 더 많은 사람들이 경제적 자유와 성장의 기회를 얻을 수 있도록 돕는 것을 목표로 합니다.
@@ -175,7 +175,7 @@ export default function AboutPage() {
             <h3 className="text-2xl font-bold mb-4">미션</h3>
             <CardContent className="p-0">
               <p className="text-gray-500 dark:text-gray-400">
-                "실전 중심의 교육과 커뮤니티 지원을 통해 디지털 비즈니스 성공의 문턱을 낮춘다"
+                &ldquo;실전 중심의 교육과 커뮤니티 지원을 통해 디지털 비즈니스 성공의 문턱을 낮춘다&rdquo;
               </p>
               <p className="mt-4">
                 이론보다는 실제 비즈니스에 바로 적용할 수 있는 실전 중심의 교육과 지속적인 성장을 위한 커뮤니티 지원을 통해 누구나 디지털 비즈니스에서 성공할 수 있도록 돕습니다.
