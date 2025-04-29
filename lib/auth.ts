@@ -1,8 +1,9 @@
 import type { NextAuthConfig } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { connectToDB } from "./db";
-import User from "@/models/User";
-import bcrypt from "bcryptjs";
+import { User } from "@/models/User";
+import { getAuth } from "firebase-admin/auth";
+import { getApp } from "firebase-admin/app";
 import { JWT } from "next-auth/jwt";
 import { Session } from "next-auth";
 
@@ -49,34 +50,37 @@ export const authOptions: NextAuthConfig = {
           throw new Error("이메일과 비밀번호를 입력해주세요.");
         }
 
-        await connectToDB();
+        try {
+          const auth = getAuth(getApp());
+          const userCredential = await auth.getUserByEmail(credentials.email);
+          
+          if (!userCredential) {
+            throw new Error("등록되지 않은 이메일입니다.");
+          }
 
-        const user = await User.findOne({ email: credentials.email });
+          // Firestore에서 추가 사용자 정보 조회
+          const db = await connectToDB();
+          const userDoc = await db.collection('users').doc(userCredential.uid).get();
+          const userData = userDoc.data() as User;
 
-        if (!user || !user.password) {
-          throw new Error("등록되지 않은 이메일입니다.");
+          if (!userData || userData.status === "inactive") {
+            throw new Error("비활성화된 계정입니다. 관리자에게 문의하세요.");
+          }
+
+          // Firebase Auth로 로그인 시도
+          const signInResult = await auth.createCustomToken(userCredential.uid);
+
+          return {
+            id: userCredential.uid,
+            name: userData.name,
+            email: userData.email,
+            role: userData.role || "user",
+            points: userData.points || 0,
+          };
+        } catch (error) {
+          console.error("로그인 오류:", error);
+          throw new Error("로그인에 실패했습니다. 다시 시도해주세요.");
         }
-
-        if (user.status === "inactive") {
-          throw new Error("비활성화된 계정입니다. 관리자에게 문의하세요.");
-        }
-
-        const isPasswordMatch = await bcrypt.compare(
-          credentials.password as string,
-          user.password as string
-        );
-
-        if (!isPasswordMatch) {
-          throw new Error("비밀번호가 일치하지 않습니다.");
-        }
-
-        return {
-          id: user._id.toString(),
-          name: user.name,
-          email: user.email,
-          role: user.role || "user",
-          points: user.points || 0,
-        };
       },
     }),
   ],
