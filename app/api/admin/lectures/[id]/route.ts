@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { connectToDB } from "@/lib/db";
-import Lecture from "@/models/Lecture";
+import { db } from "@/lib/db";
+import { Lecture, LECTURE_COLLECTION } from "@/models/Lecture";
 import { auth } from "@/auth";
-import { authOptions, isAdmin } from "@/migration/lib/auth";
+import { Timestamp } from "firebase-admin/firestore";
 
 /**
  * 특정 강의 조회 API
@@ -22,19 +22,19 @@ export async function GET(
       );
     }
 
-    // DB 연결
-    await connectToDB();
-
     // 강의 조회
-    const lecture = await Lecture.findById(params.id);
-    if (!lecture) {
+    const lectureDoc = await db.collection(LECTURE_COLLECTION).doc(params.id).get();
+    if (!lectureDoc.exists) {
       return NextResponse.json(
         { error: "강의를 찾을 수 없습니다." },
         { status: 404 }
       );
     }
 
-    return NextResponse.json(lecture);
+    return NextResponse.json({
+      id: lectureDoc.id,
+      ...lectureDoc.data()
+    });
   } catch (error) {
     console.error("강의 조회 오류:", error);
     return NextResponse.json(
@@ -65,12 +65,10 @@ export async function PATCH(
     // 요청 데이터 파싱
     const data = await req.json();
     
-    // DB 연결
-    await connectToDB();
-
     // 강의 존재 확인
-    const lecture = await Lecture.findById(params.id);
-    if (!lecture) {
+    const lectureRef = db.collection(LECTURE_COLLECTION).doc(params.id);
+    const lectureDoc = await lectureRef.get();
+    if (!lectureDoc.exists) {
       return NextResponse.json(
         { error: "강의를 찾을 수 없습니다." },
         { status: 404 }
@@ -78,21 +76,21 @@ export async function PATCH(
     }
 
     // 강의 정보 업데이트
-    const updatedLecture = await Lecture.findByIdAndUpdate(
-      params.id,
-      { 
-        $set: {
-          ...data,
-          updatedAt: new Date(),
-          updatedBy: session.user.id
-        } 
-      },
-      { new: true }
-    );
+    await lectureRef.update({
+      ...data,
+      updatedAt: Timestamp.now(),
+      updatedBy: session.user.id
+    });
+
+    // 업데이트된 강의 정보 조회
+    const updatedDoc = await lectureRef.get();
 
     return NextResponse.json({
       message: "강의 정보가 성공적으로 업데이트되었습니다.",
-      lecture: updatedLecture,
+      lecture: {
+        id: updatedDoc.id,
+        ...updatedDoc.data()
+      },
     });
   } catch (error) {
     console.error("강의 정보 수정 오류:", error);
@@ -121,12 +119,10 @@ export async function DELETE(
       );
     }
 
-    // DB 연결
-    await connectToDB();
-
     // 강의 존재 확인
-    const lecture = await Lecture.findById(params.id);
-    if (!lecture) {
+    const lectureRef = db.collection(LECTURE_COLLECTION).doc(params.id);
+    const lectureDoc = await lectureRef.get();
+    if (!lectureDoc.exists) {
       return NextResponse.json(
         { error: "강의를 찾을 수 없습니다." },
         { status: 404 }
@@ -134,7 +130,7 @@ export async function DELETE(
     }
 
     // 강의 삭제
-    await Lecture.findByIdAndDelete(params.id);
+    await lectureRef.delete();
 
     return NextResponse.json({
       message: "강의가 성공적으로 삭제되었습니다.",

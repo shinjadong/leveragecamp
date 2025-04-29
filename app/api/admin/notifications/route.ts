@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { connectToDB } from "@/lib/db";
-import Notification from "@/models/Notification";
+import { db } from "@/lib/db";
+import { Notification, NOTIFICATION_COLLECTION } from "@/models/Notification";
 import { auth } from "@/auth";
-import { authOptions, isAdmin } from "@/migration/lib/auth";
+import { Timestamp } from "firebase-admin/firestore";
 
 /**
  * 공지사항 목록 조회 API
@@ -27,31 +27,39 @@ export async function GET(req: NextRequest) {
     const category = searchParams.get("category") || "all";
     const isImportant = searchParams.get("isImportant");
 
-    // DB 연결
-    await connectToDB();
+    // 기본 쿼리
+    let query = db.collection(NOTIFICATION_COLLECTION);
 
-    // 필터 조건 구성
-    const filter: any = {};
+    // 검색어 필터링
     if (search) {
-      filter.$or = [
-        { title: { $regex: search, $options: "i" } },
-        { content: { $regex: search, $options: "i" } },
-        { author: { $regex: search, $options: "i" } },
-      ];
+      query = query.where("title", ">=", search)
+        .where("title", "<=", search + "\uf8ff");
     }
+
+    // 카테고리 필터링
     if (category !== "all") {
-      filter.category = category;
+      query = query.where("category", "==", category);
     }
+
+    // 중요도 필터링
     if (isImportant !== null) {
-      filter.isImportant = isImportant === "true";
+      query = query.where("isImportant", "==", isImportant === "true");
     }
+
+    // 정렬 및 페이징
+    const startAt = (page - 1) * limit;
+    query = query.orderBy("createdAt", "desc").offset(startAt).limit(limit);
 
     // 공지사항 목록 조회
-    const totalNotifications = await Notification.countDocuments(filter);
-    const notifications = await Notification.find(filter)
-      .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(limit);
+    const snapshot = await query.get();
+    const notifications = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+
+    // 전체 문서 수 조회
+    const totalSnapshot = await db.collection(NOTIFICATION_COLLECTION).count().get();
+    const totalNotifications = totalSnapshot.data().count;
 
     return NextResponse.json({
       notifications,
@@ -89,21 +97,30 @@ export async function POST(req: NextRequest) {
     // 요청 데이터 파싱
     const data = await req.json();
     
-    // DB 연결
-    await connectToDB();
-
     // 새 공지사항 생성
-    const newNotification = new Notification({
+    const newNotification: Notification = {
       ...data,
       author: session.user.name || "관리자",
       createdBy: session.user.id,
-      createdAt: new Date(),
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
       viewCount: 0,
-    });
-    await newNotification.save();
+      startDate: Timestamp.fromDate(new Date(data.startDate)),
+      endDate: Timestamp.fromDate(new Date(data.endDate)),
+    };
+
+    // Firestore에 저장
+    const docRef = await db.collection(NOTIFICATION_COLLECTION).add(newNotification);
+    const savedNotification = await docRef.get();
 
     return NextResponse.json(
-      { message: "공지사항이 성공적으로 추가되었습니다.", notification: newNotification },
+      { 
+        message: "공지사항이 성공적으로 추가되었습니다.", 
+        notification: {
+          id: savedNotification.id,
+          ...savedNotification.data()
+        }
+      },
       { status: 201 }
     );
   } catch (error) {

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { connectToDB } from "@/lib/db";
-import Lecture from "@/models/Lecture";
+import { db } from "@/lib/db";
+import { Lecture, LECTURE_COLLECTION } from "@/models/Lecture";
 import { auth } from "@/auth";
-import { authOptions, isAdmin } from "@/migration/lib/auth";
+import { Timestamp } from "firebase-admin/firestore";
 
 /**
  * 강의 목록 조회 API
@@ -27,31 +27,39 @@ export async function GET(req: NextRequest) {
     const category = searchParams.get("category") || "all";
     const status = searchParams.get("status") || "all";
 
-    // DB 연결
-    await connectToDB();
+    // 기본 쿼리
+    let query = db.collection(LECTURE_COLLECTION);
 
-    // 필터 조건 구성
-    const filter: any = {};
+    // 검색어 필터링
     if (search) {
-      filter.$or = [
-        { title: { $regex: search, $options: "i" } },
-        { description: { $regex: search, $options: "i" } },
-        { instructor: { $regex: search, $options: "i" } },
-      ];
+      query = query.where("title", ">=", search)
+        .where("title", "<=", search + "\uf8ff");
     }
+
+    // 카테고리 필터링
     if (category !== "all") {
-      filter.category = category;
+      query = query.where("category", "==", category);
     }
+
+    // 상태 필터링
     if (status !== "all") {
-      filter.status = status;
+      query = query.where("status", "==", status);
     }
+
+    // 정렬 및 페이징
+    const startAt = (page - 1) * limit;
+    query = query.orderBy("createdAt", "desc").offset(startAt).limit(limit);
 
     // 강의 목록 조회
-    const totalLectures = await Lecture.countDocuments(filter);
-    const lectures = await Lecture.find(filter)
-      .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(limit);
+    const snapshot = await query.get();
+    const lectures = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+
+    // 전체 문서 수 조회
+    const totalSnapshot = await db.collection(LECTURE_COLLECTION).count().get();
+    const totalLectures = totalSnapshot.data().count;
 
     return NextResponse.json({
       lectures,
@@ -89,18 +97,26 @@ export async function POST(req: NextRequest) {
     // 요청 데이터 파싱
     const data = await req.json();
     
-    // DB 연결
-    await connectToDB();
-
     // 새 강의 생성
-    const newLecture = new Lecture({
+    const newLecture: Lecture = {
       ...data,
       createdBy: session.user.id,
-    });
-    await newLecture.save();
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    };
+
+    // Firestore에 저장
+    const docRef = await db.collection(LECTURE_COLLECTION).add(newLecture);
+    const savedLecture = await docRef.get();
 
     return NextResponse.json(
-      { message: "강의가 성공적으로 추가되었습니다.", lecture: newLecture },
+      { 
+        message: "강의가 성공적으로 추가되었습니다.", 
+        lecture: {
+          id: savedLecture.id,
+          ...savedLecture.data()
+        }
+      },
       { status: 201 }
     );
   } catch (error) {

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { connectToDB } from "@/lib/db";
-import User from "@/models/User";
+import { db } from "@/lib/db";
+import { User, USER_COLLECTION } from "@/models/User";
 import { auth } from "@/auth";
-import { authOptions, isAdmin } from "@/migration/lib/auth";
+import { Timestamp } from "firebase-admin/firestore";
 
 /**
  * 회원 목록 조회 API
@@ -26,29 +26,38 @@ export async function GET(req: NextRequest) {
     const search = searchParams.get("search") || "";
     const status = searchParams.get("status") || "all";
 
-    // DB 연결
-    await connectToDB();
+    // 기본 쿼리
+    let query = db.collection(USER_COLLECTION);
 
-    // 필터 조건 구성
-    const filter: any = {};
+    // 검색어 필터링
     if (search) {
-      filter.$or = [
-        { name: { $regex: search, $options: "i" } },
-        { email: { $regex: search, $options: "i" } },
-        { phone: { $regex: search, $options: "i" } },
-      ];
+      query = query.where("name", ">=", search)
+        .where("name", "<=", search + "\uf8ff");
     }
+
+    // 상태 필터링
     if (status !== "all") {
-      filter.status = status;
+      query = query.where("status", "==", status);
     }
+
+    // 정렬 및 페이징
+    const startAt = (page - 1) * limit;
+    query = query.orderBy("createdAt", "desc").offset(startAt).limit(limit);
 
     // 회원 목록 조회
-    const totalUsers = await User.countDocuments(filter);
-    const users = await User.find(filter)
-      .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(limit)
-      .select("-password"); // 비밀번호 제외
+    const snapshot = await query.get();
+    const users = snapshot.docs.map(doc => {
+      const data = doc.data();
+      delete data.password;
+      return {
+        id: doc.id,
+        ...data
+      };
+    });
+
+    // 전체 문서 수 조회
+    const totalSnapshot = await db.collection(USER_COLLECTION).count().get();
+    const totalUsers = totalSnapshot.data().count;
 
     return NextResponse.json({
       users,
@@ -86,12 +95,11 @@ export async function POST(req: NextRequest) {
     // 요청 데이터 파싱
     const data = await req.json();
     
-    // DB 연결
-    await connectToDB();
-
     // 이메일 중복 확인
-    const existingUser = await User.findOne({ email: data.email });
-    if (existingUser) {
+    const emailQuery = await db.collection(USER_COLLECTION)
+      .where("email", "==", data.email)
+      .get();
+    if (!emailQuery.empty) {
       return NextResponse.json(
         { error: "이미 등록된 이메일입니다." },
         { status: 400 }
@@ -99,15 +107,33 @@ export async function POST(req: NextRequest) {
     }
 
     // 새 회원 생성
-    const newUser = new User(data);
-    await newUser.save();
+    const newUser: User = {
+      ...data,
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+      registrationDate: Timestamp.now(),
+      loginCount: 0,
+      points: 0,
+      groups: [],
+      smsConsent: false,
+      emailConsent: false,
+      thirdPartyConsent: false,
+    };
 
-    // 비밀번호 제외하고 응답
-    const userResponse = newUser.toObject();
-    delete userResponse.password;
+    // Firestore에 저장
+    const docRef = await db.collection(USER_COLLECTION).add(newUser);
+    const savedUser = await docRef.get();
+    const userData = savedUser.data();
+    delete userData?.password;
 
     return NextResponse.json(
-      { message: "회원이 성공적으로 추가되었습니다.", user: userResponse },
+      { 
+        message: "회원이 성공적으로 추가되었습니다.", 
+        user: {
+          id: savedUser.id,
+          ...userData
+        }
+      },
       { status: 201 }
     );
   } catch (error) {

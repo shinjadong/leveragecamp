@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { connectToDB } from "@/lib/db";
-import Challenge from "@/models/Challenge";
+import { db } from "@/lib/db";
+import { Challenge, CHALLENGE_COLLECTION } from "@/models/Challenge";
 import { auth } from "@/auth";
-import { authOptions, isAdmin } from "@/migration/lib/auth";
+import { Timestamp } from "firebase-admin/firestore";
 
 /**
  * 챌린지 목록 조회 API
@@ -26,62 +26,48 @@ export async function GET(req: NextRequest) {
     const search = searchParams.get("search") || "";
     const status = searchParams.get("status") || "all";
 
-    // DB 연결
-    await connectToDB();
-
     // 현재 날짜
-    const now = new Date();
+    const now = Timestamp.now();
 
-    // 필터 조건 구성
-    const filter: any = {};
+    // 기본 쿼리
+    let query = db.collection(CHALLENGE_COLLECTION);
+
+    // 검색어 필터링
     if (search) {
-      filter.$or = [
-        { title: { $regex: search, $options: "i" } },
-        { description: { $regex: search, $options: "i" } },
-        { mentor: { $regex: search, $options: "i" } },
-      ];
+      query = query.where("title", ">=", search)
+        .where("title", "<=", search + "\uf8ff");
     }
-    
+
     // 상태 필터링
     if (status !== "all") {
       if (status === "upcoming") {
-        filter.startDate = { $gt: now };
+        query = query.where("startDate", ">", now);
       } else if (status === "active") {
-        filter.startDate = { $lte: now };
-        filter.endDate = { $gte: now };
+        query = query.where("startDate", "<=", now)
+          .where("endDate", ">=", now);
       } else if (status === "completed") {
-        filter.endDate = { $lt: now };
+        query = query.where("endDate", "<", now);
       }
     }
 
-    // 챌린지 목록 조회
-    const totalChallenges = await Challenge.countDocuments(filter);
-    const challenges = await Challenge.find(filter)
-      .sort({ startDate: 1 })
-      .skip((page - 1) * limit)
-      .limit(limit);
+    // 정렬 및 페이징
+    const startAt = (page - 1) * limit;
+    query = query.orderBy("startDate").offset(startAt).limit(limit);
 
-    // 각 챌린지의 상태 계산
-    const challengesWithStatus = challenges.map(challenge => {
-      const challengeObj = challenge.toObject();
-      const startDate = new Date(challenge.startDate);
-      const endDate = new Date(challenge.endDate);
-      
-      let status = "upcoming";
-      if (now >= startDate && now <= endDate) {
-        status = "active";
-      } else if (now > endDate) {
-        status = "completed";
-      }
-      
-      return {
-        ...challengeObj,
-        status
-      };
-    });
+    // 챌린지 목록 조회
+    const snapshot = await query.get();
+    const challenges = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+      status: getStatus(doc.data() as Challenge, now)
+    }));
+
+    // 전체 문서 수 조회
+    const totalSnapshot = await db.collection(CHALLENGE_COLLECTION).count().get();
+    const totalChallenges = totalSnapshot.data().count;
 
     return NextResponse.json({
-      challenges: challengesWithStatus,
+      challenges,
       pagination: {
         total: totalChallenges,
         page,
@@ -116,20 +102,29 @@ export async function POST(req: NextRequest) {
     // 요청 데이터 파싱
     const data = await req.json();
     
-    // DB 연결
-    await connectToDB();
-
     // 새 챌린지 생성
-    const newChallenge = new Challenge({
+    const newChallenge: Challenge = {
       ...data,
       createdBy: session.user.id,
-      createdAt: new Date(),
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
       participants: data.participants || 0,
-    });
-    await newChallenge.save();
+      startDate: Timestamp.fromDate(new Date(data.startDate)),
+      endDate: Timestamp.fromDate(new Date(data.endDate)),
+    };
+
+    // Firestore에 저장
+    const docRef = await db.collection(CHALLENGE_COLLECTION).add(newChallenge);
+    const savedChallenge = await docRef.get();
 
     return NextResponse.json(
-      { message: "챌린지가 성공적으로 추가되었습니다.", challenge: newChallenge },
+      { 
+        message: "챌린지가 성공적으로 추가되었습니다.", 
+        challenge: {
+          id: savedChallenge.id,
+          ...savedChallenge.data()
+        }
+      },
       { status: 201 }
     );
   } catch (error) {
@@ -138,5 +133,21 @@ export async function POST(req: NextRequest) {
       { error: "챌린지를 추가하는 중 오류가 발생했습니다." },
       { status: 500 }
     );
+  }
+}
+
+/**
+ * 챌린지 상태 계산 함수
+ */
+function getStatus(challenge: Challenge, now: Timestamp): string {
+  const startDate = challenge.startDate;
+  const endDate = challenge.endDate;
+  
+  if (now.toMillis() < startDate.toMillis()) {
+    return "upcoming";
+  } else if (now.toMillis() >= startDate.toMillis() && now.toMillis() <= endDate.toMillis()) {
+    return "active";
+  } else {
+    return "completed";
   }
 }

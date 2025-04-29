@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { connectToDB } from "@/lib/db";
-import User from "@/models/User";
+import { db } from "@/lib/db";
+import { User, USER_COLLECTION } from "@/models/User";
 import { auth } from "@/auth";
-import { authOptions, isAdmin } from "@/migration/lib/auth";
+import { Timestamp } from "firebase-admin/firestore";
 import bcrypt from "bcryptjs";
 
 /**
@@ -23,19 +23,23 @@ export async function GET(
       );
     }
 
-    // DB 연결
-    await connectToDB();
-
     // 회원 조회
-    const user = await User.findById(params.id).select("-password");
-    if (!user) {
+    const userDoc = await db.collection(USER_COLLECTION).doc(params.id).get();
+    if (!userDoc.exists) {
       return NextResponse.json(
         { error: "회원을 찾을 수 없습니다." },
         { status: 404 }
       );
     }
 
-    return NextResponse.json(user);
+    // 비밀번호 필드 제외
+    const userData = userDoc.data();
+    delete userData?.password;
+
+    return NextResponse.json({
+      id: userDoc.id,
+      ...userData
+    });
   } catch (error) {
     console.error("회원 조회 오류:", error);
     return NextResponse.json(
@@ -66,12 +70,10 @@ export async function PATCH(
     // 요청 데이터 파싱
     const data = await req.json();
     
-    // DB 연결
-    await connectToDB();
-
     // 회원 존재 확인
-    const user = await User.findById(params.id);
-    if (!user) {
+    const userRef = db.collection(USER_COLLECTION).doc(params.id);
+    const userDoc = await userRef.get();
+    if (!userDoc.exists) {
       return NextResponse.json(
         { error: "회원을 찾을 수 없습니다." },
         { status: 404 }
@@ -79,9 +81,11 @@ export async function PATCH(
     }
 
     // 이메일 변경 시 중복 확인
-    if (data.email && data.email !== user.email) {
-      const existingUser = await User.findOne({ email: data.email });
-      if (existingUser) {
+    if (data.email && data.email !== userDoc.data()?.email) {
+      const emailQuery = await db.collection(USER_COLLECTION)
+        .where("email", "==", data.email)
+        .get();
+      if (!emailQuery.empty) {
         return NextResponse.json(
           { error: "이미 등록된 이메일입니다." },
           { status: 400 }
@@ -95,15 +99,22 @@ export async function PATCH(
     }
 
     // 회원 정보 업데이트
-    const updatedUser = await User.findByIdAndUpdate(
-      params.id,
-      { $set: data },
-      { new: true }
-    ).select("-password");
+    await userRef.update({
+      ...data,
+      updatedAt: Timestamp.now()
+    });
+
+    // 업데이트된 회원 정보 조회
+    const updatedDoc = await userRef.get();
+    const updatedData = updatedDoc.data();
+    delete updatedData?.password;
 
     return NextResponse.json({
       message: "회원 정보가 성공적으로 업데이트되었습니다.",
-      user: updatedUser,
+      user: {
+        id: updatedDoc.id,
+        ...updatedData
+      },
     });
   } catch (error) {
     console.error("회원 정보 수정 오류:", error);
@@ -132,12 +143,10 @@ export async function DELETE(
       );
     }
 
-    // DB 연결
-    await connectToDB();
-
     // 회원 존재 확인
-    const user = await User.findById(params.id);
-    if (!user) {
+    const userRef = db.collection(USER_COLLECTION).doc(params.id);
+    const userDoc = await userRef.get();
+    if (!userDoc.exists) {
       return NextResponse.json(
         { error: "회원을 찾을 수 없습니다." },
         { status: 404 }
@@ -145,7 +154,7 @@ export async function DELETE(
     }
 
     // 회원 삭제
-    await User.findByIdAndDelete(params.id);
+    await userRef.delete();
 
     return NextResponse.json({
       message: "회원이 성공적으로 삭제되었습니다.",
